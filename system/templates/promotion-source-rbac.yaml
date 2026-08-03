@@ -1,0 +1,38 @@
+{{- $order := .Values.environments.order }}
+{{- $currentIndex := -1 }}
+{{- range $index, $name := $order }}
+{{- if eq $name $.Values.environment.name }}{{ $currentIndex = $index }}{{- end }}
+{{- end }}
+{{- if ne (first $order) .Values.build.environment }}{{ fail "build environment must be first in the ordered promotion lifecycle" }}{{- end }}
+{{- if lt $currentIndex 0 }}{{ fail (printf "environment %q is not ordered" .Values.environment.name) }}{{- end }}
+{{- if lt $currentIndex (sub (len $order) 1) }}
+{{- $targetName := index $order (add $currentIndex 1) }}
+{{- $target := index .Values.environments.definitions $targetName }}
+{{- if not $target }}{{ fail (printf "ordered environment %q has no definition" $targetName) }}{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: image-promoter-source-credential
+  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ .Values.registry.credentials.sourcePullSecretName }}]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: image-promoter-from-{{ .Values.environment.name }}-to-{{ $targetName }}
+  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+subjects:
+  - kind: ServiceAccount
+    name: pipeline
+    namespace: {{ .Values.systemName }}{{ $target.namespaceSuffix }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: image-promoter-source-credential
+{{- end }}

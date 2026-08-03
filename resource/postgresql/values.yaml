@@ -1,0 +1,12 @@
+systemName: example
+resourceName: app-db
+clusterName: app-db-dev
+postgresVersion: 16
+instances:
+  replicas: 1
+storage:
+  size: 5Gi
+  storageClass: ''
+user:
+  name: app
+  database: app

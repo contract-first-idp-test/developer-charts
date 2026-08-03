@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.componentName }}
+  annotations: {argocd.argoproj.io/sync-wave: "3"}
+  labels:
+    app.kubernetes.io/name: {{ .Values.componentName }}
+    backstage.io/kubernetes-id: {{ .Values.componentName }}
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: {app.kubernetes.io/name: {{ .Values.componentName }}}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.componentName }}
+        backstage.io/kubernetes-id: {{ .Values.componentName }}
+        contract-first-idp.github.io/system: {{ .Values.systemName }}
+        contract-first-idp.github.io/component: {{ .Values.componentName }}
+        contract-first-idp.github.io/environment: {{ .Values.environment }}
+    spec:
+{{- with .Values.runtime.imagePullSecretNames }}
+      imagePullSecrets:
+{{- range . }}
+        - name: {{ . }}
+{{- end }}
+{{- end }}
+      containers:
+        - name: {{ .Values.componentName }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: health, containerPort: {{ .Values.runtime.health.port }}}
+          readinessProbe:
+            httpGet: {path: {{ .Values.runtime.health.readinessPath }}, port: health}
+            initialDelaySeconds: {{ .Values.runtime.health.initialDelaySeconds }}
+            periodSeconds: {{ .Values.runtime.health.periodSeconds }}
+          livenessProbe:
+            httpGet: {path: {{ .Values.runtime.health.livenessPath }}, port: health}
+            initialDelaySeconds: {{ .Values.runtime.health.initialDelaySeconds }}
+            periodSeconds: {{ .Values.runtime.health.periodSeconds }}
+          resources:
+{{ toYaml (.Values.runtime.resources | default dict) | indent 12 }}
+{{- with .Values.runtime.env }}
+          env:
+{{ toYaml . | indent 12 }}
+{{- end }}
+{{- with .Values.runtime.envFromSecretNames }}
+          envFrom:
+{{- range . }}
+            - secretRef:
+                name: {{ . }}
+{{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.componentName }}
+  annotations: {argocd.argoproj.io/sync-wave: "3"}
+  labels:
+    app.kubernetes.io/name: {{ .Values.componentName }}
+    backstage.io/kubernetes-id: {{ .Values.componentName }}
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+spec:
+  selector: {app.kubernetes.io/name: {{ .Values.componentName }}}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+{{- if .Values.route.enabled }}
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ .Values.componentName }}
+  annotations: {argocd.argoproj.io/sync-wave: "3"}
+  labels:
+    app.kubernetes.io/name: {{ .Values.componentName }}
+    backstage.io/kubernetes-id: {{ .Values.componentName }}
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+spec:
+  to: {kind: Service, name: {{ .Values.componentName }}}
+  port: {targetPort: http}
+  tls: {termination: edge, insecureEdgeTerminationPolicy: Redirect}
+{{- end }}

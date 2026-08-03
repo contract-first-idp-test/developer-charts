@@ -1,0 +1,52 @@
+{{- if eq .Values.environment.name .Values.build.environment }}
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ .Values.systemName }}-api-builds
+  namespace: {{ .Values.delivery.namespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+spec:
+  goTemplate: true
+  goTemplateOptions: [missingkey=error]
+  generators:
+    - git:
+        repoURL: {{ .Values.systemRepository.url }}
+        revision: {{ .Values.systemRepository.revision }}
+        files:
+          - path: apis/*/values.yaml
+  template:
+    metadata:
+      name: '{{ .Values.systemName }}-{{ "{{ index .path.segments 1 }}" }}-api-build'
+      labels:
+        contract-first-idp.github.io/domain: {{ .Values.domainName | quote }}
+        contract-first-idp.github.io/system: {{ .Values.systemName | quote }}
+        contract-first-idp.github.io/api: '{{ "{{ index .path.segments 1 }}" }}'
+        contract-first-idp.github.io/environment: {{ .Values.build.environment | quote }}
+    spec:
+      project: {{ .Values.delivery.project }}
+      sources:
+        - repoURL: {{ .Values.delivery.charts.repository }}
+          targetRevision: {{ .Values.delivery.charts.revision }}
+          path: api/specification-build
+          helm:
+            valueFiles: ['$values/apis/{{ "{{ index .path.segments 1 }}" }}/values.yaml']
+            valuesObject:
+              systemName: {{ .Values.systemName }}
+              groupId: {{ .Values.groupId }}
+              apiName: '{{ "{{ index .path.segments 1 }}" }}'
+              revision: {{ .Values.build.sourceRevision }}
+              serviceAccountName: {{ .Values.systemName }}-build
+              schemaRegistry:
+{{ toYaml .Values.schemaRegistry | indent 16 }}
+              spectralRules:
+{{ toYaml .Values.spectralRules | indent 16 }}
+        - repoURL: {{ .Values.systemRepository.url }}
+          targetRevision: {{ .Values.systemRepository.revision }}
+          ref: values
+      destination:
+        server: {{ .Values.delivery.destinationServer }}
+        namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=false]
+{{- end }}

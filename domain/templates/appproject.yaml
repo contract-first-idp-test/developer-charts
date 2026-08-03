@@ -1,0 +1,26 @@
+{{- $domainProjectName := include "contract-first-idp.domainProjectName" (dict "domainName" .Values.metadata.name) }}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ $domainProjectName | quote }}
+  namespace: {{ .Values.spec.platform.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    contract-first-idp.github.io/domain: {{ .Values.metadata.name | quote }}
+    contract-first-idp.github.io/project-scope: domain
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Contract-First IDP System controller Applications for the {{ .Values.metadata.name }} Domain.
+  sourceRepos:
+    - "*"
+  destinations:
+    - server: "*"
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

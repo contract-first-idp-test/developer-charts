@@ -1,0 +1,79 @@
+{{- $currentIndex := -1 }}
+{{- range $index, $name := .Values.environments.order }}
+{{- if eq $name $.Values.environment.name }}{{ $currentIndex = $index }}{{- end }}
+{{- end }}
+{{- if lt $currentIndex 0 }}{{ fail (printf "environment %q is not ordered" .Values.environment.name) }}{{- end }}
+{{- $sourceEnvironment := "" }}
+{{- if gt $currentIndex 0 }}{{ $sourceEnvironment = index .Values.environments.order (sub $currentIndex 1) }}{{- end }}
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ .Values.systemName }}-{{ .Values.environment.name }}-components
+  namespace: {{ .Values.delivery.namespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+spec:
+  goTemplate: true
+  goTemplateOptions: [missingkey=error]
+  generators:
+    - git:
+        repoURL: {{ .Values.systemRepository.url }}
+        revision: {{ .Values.systemRepository.revision }}
+        files:
+          - path: components/*/releases/{{ .Values.environment.name }}.yaml
+  template:
+    metadata:
+      name: '{{ .Values.systemName }}-{{ "{{ index .path.segments 1 }}" }}-{{ .Values.environment.name }}'
+      labels:
+        contract-first-idp.github.io/domain: {{ .Values.domainName | quote }}
+        contract-first-idp.github.io/system: {{ .Values.systemName | quote }}
+        contract-first-idp.github.io/component: '{{ "{{ index .path.segments 1 }}" }}'
+        contract-first-idp.github.io/environment: {{ .Values.environment.name | quote }}
+    spec:
+      project: {{ .Values.delivery.project }}
+      sources:
+        - repoURL: {{ .Values.delivery.charts.repository }}
+          targetRevision: {{ .Values.delivery.charts.revision }}
+          path: component/runtime
+          helm:
+            valueFiles:
+              - '$values/components/{{ "{{ index .path.segments 1 }}" }}/values.yaml'
+              - '$values/components/{{ "{{ index .path.segments 1 }}" }}/environments/{{ .Values.environment.name }}.yaml'
+              - '$values/components/{{ "{{ index .path.segments 1 }}" }}/releases/{{ .Values.environment.name }}.yaml'
+            valuesObject:
+              systemName: {{ .Values.systemName }}
+              componentName: '{{ "{{ index .path.segments 1 }}" }}'
+              environment: {{ .Values.environment.name }}
+              namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+              image:
+                repository: '{{ .Values.registry.host }}/{{ .Values.registry.clusterId }}_{{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}/{{ "{{ index .path.segments 1 }}" }}'
+              runtime:
+                imagePullSecretNames:
+                  - {{ .Values.registry.credentials.runtimePullSecretName }}
+              build:
+                environment: {{ .Values.build.environment }}
+                imageRepository: '{{ .Values.registry.host }}/{{ .Values.registry.clusterId }}_{{ .Values.systemName }}{{ .Values.build.namespaceSuffix }}/{{ "{{ index .path.segments 1 }}" }}'
+                serviceAccountName: {{ .Values.systemName }}-build
+                registryPushSecretName: {{ .Values.registry.credentials.destinationPushSecretName }}
+                deploymentUpdate:
+                  strategy: {{ .Values.build.deploymentUpdate.strategy }}
+              promotion:
+                pipelineName: promote-image
+                serviceAccountName: image-promoter
+                sourceEnvironment: {{ $sourceEnvironment | quote }}
+        - repoURL: {{ .Values.systemRepository.url }}
+          targetRevision: {{ .Values.systemRepository.revision }}
+          ref: values
+      destination:
+        server: {{ .Values.delivery.destinationServer }}
+        namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          name: '{{ "{{ index .path.segments 1 }}" }}'
+          jsonPointers:
+            - /spec/template/metadata/annotations
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions:
+          - CreateNamespace=false
+          - RespectIgnoreDifferences=true

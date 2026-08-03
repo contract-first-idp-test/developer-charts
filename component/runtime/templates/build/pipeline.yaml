@@ -1,0 +1,147 @@
+{{- if and .Values.build.enabled (eq .Values.environment .Values.build.environment) }}
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: {{ .Values.componentName }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+  labels:
+    backstage.io/kubernetes-id: {{ .Values.componentName }}
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+spec:
+  params:
+    - {name: git-url, type: string, default: {{ .Values.build.repository | quote }}}
+    - {name: git-revision, type: string, default: {{ .Values.build.revision | quote }}}
+    - {name: image-repository, type: string, default: {{ .Values.build.imageRepository | quote }}}
+    - {name: release-version, type: string, default: ""}
+  workspaces:
+    - {name: source}
+    - {name: maven-settings}
+  tasks:
+    - name: clone
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: git-clone}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - {name: URL, value: $(params.git-url)}
+        - {name: REVISION, value: $(params.git-revision)}
+        - {name: DELETE_EXISTING, value: "true"}
+        - {name: SUBDIRECTORY, value: source}
+      workspaces: [{name: output, workspace: source}]
+    - name: package
+      runAfter: [clone]
+      when:
+        - {input: $(params.release-version), operator: in, values: [""]}
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: maven}
+          - {name: namespace, value: tekton-tasks}
+      params:
+        - {name: GOALS, value: [clean, package, -DskipTests, -B]}
+        - {name: JAVA_VERSION, value: "21"}
+      workspaces:
+        - {name: source, workspace: source, subPath: source}
+        - {name: maven_settings, workspace: maven-settings}
+    - name: build-and-push
+      runAfter: [package]
+      when:
+        - {input: $(params.release-version), operator: in, values: [""]}
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: buildah}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - {name: IMAGE, value: $(params.image-repository):git-$(tasks.clone.results.COMMIT)}
+        - {name: DOCKERFILE, value: {{ .Values.build.dockerfilePath | quote }}}
+      workspaces: [{name: source, workspace: source, subPath: source}]
+    - name: publish-latest
+      runAfter: [build-and-push]
+      when:
+        - {input: $(params.release-version), operator: in, values: [""]}
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: skopeo-copy}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - name: SOURCE_IMAGE_URL
+          value: docker://$(params.image-repository):git-$(tasks.clone.results.COMMIT)
+        - name: DESTINATION_IMAGE_URL
+          value: docker://$(params.image-repository):latest
+        - name: SRC_TLS_VERIFY
+          value: "true"
+        - name: DEST_TLS_VERIFY
+          value: "true"
+{{- if eq (.Values.build.deploymentUpdate.strategy | default "restart") "restart" }}
+    - name: restart-runtime
+      runAfter: [publish-latest]
+      when:
+        - {input: $(params.release-version), operator: in, values: [""]}
+      taskSpec:
+        steps:
+          - name: rollout
+            image: quay.io/openshift/origin-cli:4.16
+            script: |
+              #!/bin/sh
+              set -eu
+              if ! oc get deployment/{{ .Values.componentName }} -n {{ .Values.namespace }} >/dev/null 2>&1; then
+                echo "Deployment is not present yet; initial image build is complete."
+                exit 0
+              fi
+              oc rollout restart deployment/{{ .Values.componentName }} -n {{ .Values.namespace }}
+              oc rollout status deployment/{{ .Values.componentName }} -n {{ .Values.namespace }} --timeout=2m
+{{- end }}
+    - name: materialize-release
+      runAfter: [clone]
+      when:
+        - {input: $(params.release-version), operator: notin, values: [""]}
+      params:
+        - {name: git-commit, value: $(tasks.clone.results.COMMIT)}
+        - {name: release-version, value: $(params.release-version)}
+        - {name: image-repository, value: $(params.image-repository)}
+      taskSpec:
+        params:
+          - {name: git-commit, type: string}
+          - {name: release-version, type: string}
+          - {name: image-repository, type: string}
+        results:
+          - {name: sourceDigest}
+          - {name: releaseDigest}
+        volumes:
+          - name: registry-auth
+            secret:
+              secretName: {{ .Values.build.registryPushSecretName }}
+              defaultMode: 0400
+              items:
+                - {key: .dockerconfigjson, path: auth.json}
+        steps:
+          - name: alias-existing-commit-image
+            image: quay.io/skopeo/stable:v1.17.0
+            volumeMounts:
+              - {name: registry-auth, mountPath: /workspace/registry-auth, readOnly: true}
+            script: |
+              #!/bin/sh
+              set -eu
+
+              repository="$(params.image-repository)"
+              commit="$(params.git-commit)"
+              release="$(params.release-version)"
+              auth_file=/workspace/registry-auth/auth.json
+
+              skopeo copy --all --preserve-digests \
+                --src-authfile "$auth_file" \
+                --dest-authfile "$auth_file" \
+                "docker://$repository:git-$commit" \
+                "docker://$repository:$release"
+
+              echo "Released git-$commit as $release."
+{{- end }}

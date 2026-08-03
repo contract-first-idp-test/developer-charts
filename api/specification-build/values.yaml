@@ -1,0 +1,16 @@
+systemName: example
+groupId: io.github.cfidp.example
+apiName: example-api
+repository: https://example.invalid/example-api.git
+revision: main
+serviceAccountName: pipeline
+schemaRegistry:
+  apiUrl: https://apicurio.example.invalid/apis/registry/v3
+spectralRules:
+  repositoryUrl: https://example.invalid/spectral-rules.git
+  revision: v1.0.0
+  path: ruleset.yaml
+webhook:
+  signatureVerification:
+    enabled: false
+    secretName: ""

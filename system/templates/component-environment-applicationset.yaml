@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ .Values.systemName }}-{{ .Values.environment.name }}-component-environments
+  namespace: {{ .Values.delivery.namespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+spec:
+  goTemplate: true
+  goTemplateOptions: [missingkey=error]
+  generators:
+    - git:
+        repoURL: {{ .Values.systemRepository.url }}
+        revision: {{ .Values.systemRepository.revision }}
+        files:
+          - path: components/*/environments/{{ .Values.environment.name }}.yaml
+  template:
+    metadata:
+      name: '{{ .Values.systemName }}-{{ "{{ index .path.segments 1 }}" }}-{{ .Values.environment.name }}-infrastructure'
+      labels:
+        contract-first-idp.github.io/domain: {{ .Values.domainName | quote }}
+        contract-first-idp.github.io/system: {{ .Values.systemName | quote }}
+        contract-first-idp.github.io/component: '{{ "{{ index .path.segments 1 }}" }}'
+        contract-first-idp.github.io/environment: {{ .Values.environment.name | quote }}
+    spec:
+      project: {{ .Values.delivery.project }}
+      source:
+        repoURL: {{ .Values.delivery.charts.repository }}
+        targetRevision: {{ .Values.delivery.charts.revision }}
+        path: component/environment
+        helm:
+          valuesObject:
+            systemName: {{ .Values.systemName }}
+            componentName: '{{ "{{ index .path.segments 1 }}" }}'
+            environment: {{ .Values.environment.name }}
+      destination:
+        server: {{ .Values.delivery.destinationServer }}
+        namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=false]

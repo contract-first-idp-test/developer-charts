@@ -1,0 +1,45 @@
+metadata:
+  name: retail
+  annotations:
+    contract-first-idp.github.io/scm-host: tenant-gitea.example
+    contract-first-idp.github.io/domain-org: retail-team
+    contract-first-idp.github.io/domain-repo: retail-domain
+spec:
+  platformTarget: resource:default/west
+  groupId: com.example.retail
+  environments:
+    order: [sandbox, stage, production]
+    build: sandbox
+    definitions:
+      sandbox: {namespaceSuffix: -build}
+      stage: {namespaceSuffix: -preprod}
+      production: {namespaceSuffix: ""}
+  platform:
+    target: {name: west}
+    argocd:
+      namespace: openshift-gitops
+      destinationServer: https://kubernetes.default.svc
+    cluster:
+      routerDomain: apps.west.example
+    charts:
+      repositoryUrl: https://platform-gitea.example/platform-private/developer-charts.git
+      revision: v1.0.0
+    schemaRegistry:
+      apiUrl: https://registry.example/apis/registry/v3
+    spectralRules:
+      repositoryUrl: https://platform-gitea.example/platform-private/spectral-rules.git
+      revision: v1.0.0
+      path: ruleset.yaml
+    registry:
+      quay:
+        host: quay.example
+        clusterId: west
+        credentials:
+          sourcePullSecretName: source-registry-auth
+          destinationPushSecretName: destination-registry-auth
+          runtimePullSecretName: runtime-registry-auth
+    build:
+      sourceRevision: trunk
+      sccClusterRoleName: system:openshift:scc:pipelines-scc
+      deploymentUpdate:
+        strategy: restart

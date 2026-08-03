@@ -1,0 +1,55 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ .Values.systemName }}-{{ .Values.environment.name }}-resources
+  namespace: {{ .Values.delivery.namespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+spec:
+  goTemplate: true
+  goTemplateOptions: [missingkey=error]
+  generators:
+    - merge:
+        mergeKeys: [profile, resourceName]
+        generators:
+          - git:
+              repoURL: {{ .Values.systemRepository.url }}
+              revision: {{ .Values.systemRepository.revision }}
+              files:
+                - path: resources/*/*/environments/{{ .Values.environment.name }}.yaml
+          - git:
+              repoURL: {{ .Values.systemRepository.url }}
+              revision: {{ .Values.systemRepository.revision }}
+              files:
+                - path: resources/*/*/values.yaml
+  template:
+    metadata:
+      name: '{{ .Values.systemName }}-{{ "{{ .profile }}" }}-{{ "{{ .resourceName }}" }}-{{ .Values.environment.name }}'
+      labels:
+        contract-first-idp.github.io/domain: {{ .Values.domainName | quote }}
+        contract-first-idp.github.io/system: {{ .Values.systemName | quote }}
+        contract-first-idp.github.io/resource-profile: '{{ "{{ .profile }}" }}'
+        contract-first-idp.github.io/resource: '{{ "{{ .resourceName }}" }}'
+        contract-first-idp.github.io/environment: {{ .Values.environment.name | quote }}
+    spec:
+      project: {{ .Values.delivery.project }}
+      sources:
+        - repoURL: {{ .Values.delivery.charts.repository }}
+          targetRevision: {{ .Values.delivery.charts.revision }}
+          path: '{{ "{{ .implementation.path }}" }}'
+          helm:
+            valueFiles:
+              - '$values/resources/{{ "{{ .profile }}" }}/{{ "{{ .resourceName }}" }}/values.yaml'
+              - '$values/resources/{{ "{{ .profile }}" }}/{{ "{{ .resourceName }}" }}/environments/{{ .Values.environment.name }}.yaml'
+            valuesObject:
+              systemName: {{ .Values.systemName }}
+              resourceName: '{{ "{{ .resourceName }}" }}'
+              clusterName: '{{ "{{ .resourceName }}" }}-{{ .Values.environment.name }}'
+        - repoURL: {{ .Values.systemRepository.url }}
+          targetRevision: {{ .Values.systemRepository.revision }}
+          ref: values
+      destination:
+        server: {{ .Values.delivery.destinationServer }}
+        namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+        syncOptions: [CreateNamespace=false]

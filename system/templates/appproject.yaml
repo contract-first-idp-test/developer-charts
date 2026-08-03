@@ -1,0 +1,28 @@
+{{- if eq .Values.environment.name .Values.build.environment }}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ .Values.delivery.project | quote }}
+  namespace: {{ .Values.delivery.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    contract-first-idp.github.io/domain: {{ .Values.domainName | quote }}
+    contract-first-idp.github.io/system: {{ .Values.systemName | quote }}
+    contract-first-idp.github.io/project-scope: system
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Contract-First IDP leaf Applications for the {{ .Values.systemName }} System in the {{ .Values.domainName }} Domain.
+  sourceRepos:
+    - "*"
+  destinations:
+    - server: "*"
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+{{- end }}

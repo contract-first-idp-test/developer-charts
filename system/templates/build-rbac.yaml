@@ -1,0 +1,87 @@
+{{- if eq .Values.environment.name .Values.build.environment }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.systemName }}-build
+  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+secrets:
+  - name: {{ .Values.registry.credentials.destinationPushSecretName }}
+imagePullSecrets:
+  - name: {{ .Values.registry.credentials.destinationPushSecretName }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pipeline
+  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+secrets:
+  - name: {{ .Values.registry.credentials.destinationPushSecretName }}
+imagePullSecrets:
+  - name: {{ .Values.registry.credentials.destinationPushSecretName }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.systemName }}-build
+  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, patch]
+  - apiGroups: [tekton.dev]
+    resources: [pipelines]
+    verbs: [get, list]
+  - apiGroups: [tekton.dev]
+    resources: [pipelineruns]
+    verbs: [create, get, list, watch]
+  - apiGroups: [tekton.dev]
+    resources: [taskruns]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods, pods/log, persistentvolumeclaims]
+    verbs: [create, get, list, watch, delete]
+  - apiGroups: [image.openshift.io]
+    resources: [imagestreams, imagestreamtags]
+    verbs: [get, list, create, update, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.systemName }}-build
+  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+subjects:
+  - {kind: ServiceAccount, name: {{ .Values.systemName }}-build}
+  - {kind: ServiceAccount, name: pipeline}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ .Values.systemName }}-build}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.systemName }}-eventlistener
+  namespace: {{ .Values.systemName }}{{ .Values.build.namespaceSuffix }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+subjects:
+  - {kind: ServiceAccount, name: {{ .Values.systemName }}-build}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tekton-triggers-eventlistener-roles
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Values.systemName }}-{{ .Values.build.environment }}-eventlistener
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.systemName }}-build
+    namespace: {{ .Values.systemName }}{{ .Values.build.namespaceSuffix }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tekton-triggers-eventlistener-clusterroles
+{{- end }}

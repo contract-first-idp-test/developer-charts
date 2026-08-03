@@ -1,0 +1,115 @@
+{{- $releasePipelineName := printf "%s-release" (.Values.componentName | trunc 55 | trimSuffix "-") -}}
+{{- if and .Values.build.enabled (eq .Values.environment .Values.build.environment) }}
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: {{ .Values.componentName }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+  labels:
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+spec:
+  params:
+    - {name: git-revision, value: $(extensions.revision)}
+    - {name: release-version, value: ""}
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: {{ $releasePipelineName }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+  labels:
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+spec:
+  params:
+    - {name: git-revision, value: $(extensions.tag-revision)}
+    - {name: release-version, value: $(extensions.release-version)}
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: {{ .Values.componentName }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+  labels:
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+spec:
+  params:
+    - {name: git-revision, default: {{ .Values.build.revision | quote }}}
+    - {name: release-version, default: ""}
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata: {generateName: {{ .Values.componentName }}-}
+      spec:
+        taskRunTemplate:
+          serviceAccountName: pipeline
+        pipelineRef: {name: {{ .Values.componentName }}}
+        params:
+          - {name: git-url, value: {{ .Values.build.repository | quote }}}
+          - {name: git-revision, value: $(tt.params.git-revision)}
+          - {name: release-version, value: $(tt.params.release-version)}
+        workspaces:
+          - name: source
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                resources: {requests: {storage: 2Gi}}
+          - {name: maven-settings, emptyDir: {}}
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: {{ .Values.componentName }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+  labels:
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+spec:
+  serviceAccountName: {{ .Values.build.serviceAccountName }}
+  triggers:
+    - name: main
+      interceptors:
+        - ref: {name: cel}
+          params:
+            - name: filter
+              value: "body.ref == 'refs/heads/{{ .Values.build.revision }}'"
+            - name: overlays
+              value:
+                - {key: revision, expression: "body.after"}
+      bindings: [{ref: {{ .Values.componentName }}}]
+      template: {ref: {{ .Values.componentName }}}
+    - name: release-tag
+      interceptors:
+        - ref: {name: cel}
+          params:
+            - name: filter
+              value: >-
+                body.ref.matches('^refs/tags/v[0-9]+(\\.[0-9]+){0,2}(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$') &&
+                body.after != '0000000000000000000000000000000000000000'
+            - name: overlays
+              value:
+                - {key: tag-revision, expression: "body.ref"}
+                - {key: release-version, expression: "body.ref.split('/')[2]"}
+      bindings: [{ref: {{ $releasePipelineName }}}]
+      template: {ref: {{ .Values.componentName }}}
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: el-{{ .Values.componentName }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+  labels:
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+spec:
+  to: {kind: Service, name: el-{{ .Values.componentName }}}
+  port: {targetPort: http-listener}
+  tls: {termination: edge, insecureEdgeTerminationPolicy: Redirect}
+{{- end }}

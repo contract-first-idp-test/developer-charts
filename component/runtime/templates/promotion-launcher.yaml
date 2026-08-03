@@ -1,0 +1,66 @@
+{{- if and (ne .Values.environment .Values.build.environment) .Values.image.tag }}
+{{- if not (regexMatch "^v[0-9]+(\\.[0-9]+){0,2}(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$" .Values.image.tag) }}{{ fail "promotion requires an immutable human release such as v1.7.3" }}{{- end }}
+{{- if not .Values.promotion.sourceEnvironment }}{{ fail "non-build release requires an adjacent source environment" }}{{- end }}
+{{- $componentPrefix := .Values.componentName | trunc 45 | trimSuffix "-" }}
+{{- $releaseIdentity := printf "%s:%s:%s" .Values.componentName .Values.environment .Values.image.tag }}
+{{- $releaseHash := sha256sum $releaseIdentity | trunc 8 }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $componentPrefix }}-promote-{{ $releaseHash }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    backstage.io/kubernetes-id: {{ .Values.componentName }}
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: Replace=true
+    contract-first-idp.github.io/source-environment: {{ .Values.promotion.sourceEnvironment | quote }}
+    contract-first-idp.github.io/release-tag: {{ .Values.image.tag | quote }}
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        contract-first-idp.github.io/system: {{ .Values.systemName }}
+        contract-first-idp.github.io/component: {{ .Values.componentName }}
+        contract-first-idp.github.io/environment: {{ .Values.environment }}
+    spec:
+      serviceAccountName: {{ .Values.promotion.serviceAccountName }}
+      restartPolicy: Never
+      containers:
+        - name: start-promotion
+          image: registry.redhat.io/openshift-pipelines/pipelines-cli-tkn-rhel8:v1.15.4
+          env:
+            - {name: COMPONENT, value: {{ .Values.componentName | quote }}}
+            - {name: IMAGE_TAG, value: {{ .Values.image.tag | quote }}}
+            - {name: TARGET_NAMESPACE, value: {{ .Values.namespace | quote }}}
+            - {name: PIPELINE_NAME, value: {{ .Values.promotion.pipelineName | quote }}}
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -eu
+              attempt=1
+              while [ "$attempt" -le 6 ]; do
+                if tkn pipeline describe "$PIPELINE_NAME" \
+                  -n "$TARGET_NAMESPACE" >/dev/null 2>&1; then
+                  break
+                fi
+                sleep $((attempt * 2))
+                attempt=$((attempt + 1))
+              done
+              if [ "$attempt" -gt 6 ]; then
+                echo "Target promotion Pipeline was not ready after bounded retry." >&2
+                exit 1
+              fi
+
+              tkn pipeline start "$PIPELINE_NAME" \
+                -n "$TARGET_NAMESPACE" \
+                --serviceaccount pipeline \
+                --param component="$COMPONENT" \
+                --param image-tag="$IMAGE_TAG" \
+                --use-param-defaults
+              echo "Tekton confirmed target-local PipelineRun creation."
+{{- end }}

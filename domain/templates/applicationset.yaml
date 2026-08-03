@@ -1,0 +1,103 @@
+{{- $host := index .Values.metadata.annotations "contract-first-idp.github.io/scm-host" }}
+{{- $org := index .Values.metadata.annotations "contract-first-idp.github.io/domain-org" }}
+{{- $domainRepo := index .Values.metadata.annotations "contract-first-idp.github.io/domain-repo" }}
+{{- $platformChartsRepository := include "contract-first-idp.platformChartsRepository" . }}
+{{- $tenantDomainRepository := include "contract-first-idp.tenantRepository" (dict "host" $host "org" $org "repository" $domainRepo) }}
+{{- $domainProjectName := include "contract-first-idp.domainProjectName" (dict "domainName" .Values.metadata.name) }}
+{{- $systemProjectName := include "contract-first-idp.systemProjectName" (dict "domainName" .Values.metadata.name "systemName" "{{ .systemName }}") }}
+{{- $definitions := .Values.spec.environments.definitions }}
+{{- $order := .Values.spec.environments.order }}
+{{- range $order }}
+{{- if not (index $definitions .) }}{{ fail (printf "ordered environment %q has no definition" .) }}{{ end }}
+{{- end }}
+{{- $buildName := .Values.spec.environments.build }}
+{{- if not (has $buildName $order) }}{{ fail (printf "build environment %q is not ordered by Domain policy" $buildName) }}{{ end }}
+{{- if ne (first $order) $buildName }}{{ fail "build environment must be first in the ordered promotion lifecycle" }}{{ end }}
+{{- $build := index $definitions $buildName }}
+{{- if not $build }}{{ fail (printf "build environment %q is not declared by Domain policy" $buildName) }}{{ end }}
+{{- $systemDefinitions := dict }}
+{{- range $environment := $order }}
+{{- $definition := index $definitions $environment }}
+{{- $_ := set $systemDefinitions $environment (dict "namespaceSuffix" $definition.namespaceSuffix "clusterDomain" $.Values.spec.platform.cluster.routerDomain) }}
+{{- end }}
+{{- range $index, $environment := $order }}
+{{- $selected := index $definitions $environment }}
+{{- if gt $index 0 }}
+---
+{{- end }}
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ $.Values.metadata.name }}-{{ $environment }}-systems
+  namespace: {{ $.Values.spec.platform.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  goTemplate: true
+  goTemplateOptions: [missingkey=error]
+  generators:
+    - git:
+        repoURL: {{ $tenantDomainRepository }}
+        revision: main
+        files:
+          - path: systems/*/environments/{{ $environment }}.yaml
+  template:
+    metadata:
+      name: '{{ "{{ .systemName }}" }}-{{ $environment }}-system'
+      labels:
+        contract-first-idp.github.io/domain: {{ $.Values.metadata.name | quote }}
+        contract-first-idp.github.io/system: '{{ "{{ .systemName }}" }}'
+        contract-first-idp.github.io/environment: {{ $environment | quote }}
+    spec:
+      project: {{ $domainProjectName | quote }}
+      sources:
+        - repoURL: {{ $platformChartsRepository }}
+          targetRevision: {{ $.Values.spec.platform.charts.revision }}
+          path: system
+          helm:
+            valuesObject:
+              domainName: {{ $.Values.metadata.name | quote }}
+              systemName: '{{ "{{ .systemName }}" }}'
+              groupId: '{{ "{{ .groupId }}" }}'
+              owner: group:default/{{ $.Values.metadata.name }}-maintainers
+              systemRepository:
+                url: '{{ "{{ .repository.cloneUrl }}" }}'
+                revision: '{{ "{{ .repository.revision }}" }}'
+              environment:
+                name: {{ $environment }}
+                namespaceSuffix: {{ $selected.namespaceSuffix | quote }}
+                clusterDomain: {{ $.Values.spec.platform.cluster.routerDomain | quote }}
+              environments:
+                order:
+{{ toYaml $order | indent 18 }}
+                definitions:
+{{ toYaml $systemDefinitions | indent 18 }}
+              delivery:
+                namespace: {{ $.Values.spec.platform.argocd.namespace }}
+                project: {{ $systemProjectName | quote }}
+                destinationServer: {{ $.Values.spec.platform.argocd.destinationServer }}
+                charts:
+                  repository: {{ $platformChartsRepository }}
+                  revision: {{ $.Values.spec.platform.charts.revision }}
+              registry:
+{{ toYaml $.Values.spec.platform.registry.quay | indent 16 }}
+              schemaRegistry:
+{{ toYaml $.Values.spec.platform.schemaRegistry | indent 16 }}
+              spectralRules:
+{{ toYaml $.Values.spec.platform.spectralRules | indent 16 }}
+              build:
+                environment: {{ $buildName }}
+                namespaceSuffix: {{ $build.namespaceSuffix | quote }}
+                sourceRevision: {{ $.Values.spec.platform.build.sourceRevision }}
+                sccClusterRoleName: {{ $.Values.spec.platform.build.sccClusterRoleName }}
+                deploymentUpdate:
+                  strategy: {{ $.Values.spec.platform.build.deploymentUpdate.strategy }}
+        - repoURL: {{ $tenantDomainRepository }}
+          targetRevision: main
+          ref: domain
+      destination:
+        server: {{ $.Values.spec.platform.argocd.destinationServer }}
+        namespace: {{ $.Values.spec.platform.argocd.namespace }}
+      syncPolicy:
+        automated: {prune: true, selfHeal: true}
+{{- end }}

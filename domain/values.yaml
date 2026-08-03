@@ -1,0 +1,47 @@
+metadata:
+  name: example
+  annotations:
+    contract-first-idp.github.io/scm-provider: github
+    contract-first-idp.github.io/scm-host: github.com
+    contract-first-idp.github.io/domain-org: example
+    contract-first-idp.github.io/domain-repo: example-domain
+spec:
+  platformTarget: resource:default/workshop
+  groupId: io.github.cfidp
+  environments:
+    order: [dev, test, prod]
+    build: dev
+    definitions:
+      dev: {namespaceSuffix: -dev}
+      test: {namespaceSuffix: -test}
+      prod: {namespaceSuffix: ''}
+  platform:
+    target:
+      name: workshop
+    argocd:
+      namespace: openshift-gitops
+      destinationServer: https://kubernetes.default.svc
+    cluster:
+      routerDomain: apps.example.invalid
+    charts:
+      repositoryUrl: https://github.com/contract-first-idp/developer-charts.git
+      revision: v1.0.0
+    schemaRegistry:
+      apiUrl: https://apicurio.example.invalid/apis/registry/v3
+    spectralRules:
+      repositoryUrl: https://example.invalid/spectral-rules.git
+      revision: v1.0.0
+      path: ruleset.yaml
+    registry:
+      quay:
+        host: quay.example.invalid
+        clusterId: openshift
+        credentials:
+          sourcePullSecretName: default-quay-openshift
+          destinationPushSecretName: builder-quay-openshift
+          runtimePullSecretName: default-quay-openshift
+    build:
+      sourceRevision: main
+      sccClusterRoleName: system:openshift:scc:pipelines-scc
+      deploymentUpdate:
+        strategy: restart

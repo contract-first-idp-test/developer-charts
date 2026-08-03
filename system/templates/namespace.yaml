@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  labels:
+    contract-first-idp.github.io/system: {{ .Values.systemName | quote }}
+    contract-first-idp.github.io/environment: {{ .Values.environment.name | quote }}
+  annotations:
+    contract-first-idp.github.io/owner: {{ .Values.owner | quote }}
+    argocd.argoproj.io/sync-wave: "0"

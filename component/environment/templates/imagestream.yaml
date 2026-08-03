@@ -1,0 +1,12 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: {{ .Values.componentName }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+  labels:
+    backstage.io/kubernetes-id: {{ .Values.componentName }}
+    contract-first-idp.github.io/system: {{ .Values.systemName }}
+    contract-first-idp.github.io/component: {{ .Values.componentName }}
+    contract-first-idp.github.io/environment: {{ .Values.environment }}
+spec:
+  lookupPolicy: {local: false}

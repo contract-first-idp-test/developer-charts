@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.apiName }}-api-initial-publish
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/hook-delete-policy: HookFailed
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: {{ .Values.serviceAccountName }}
+      restartPolicy: Never
+      containers:
+        - name: start-and-wait
+          image: registry.redhat.io/openshift-pipelines/pipelines-cli-tkn-rhel8:v1.15.4
+          command: [/bin/sh, -c]
+          args:
+            - >-
+              tkn pipeline start {{ .Values.apiName }}-api
+              --serviceaccount pipeline
+              --param git-url={{ .Values.repository }}
+              --param git-revision={{ .Values.revision }}
+              --workspace name=source,volumeClaimTemplateFile=/workspace/source-pvc.yaml
+              --use-param-defaults --showlog
+              --exit-with-pipelinerun-error
+          volumeMounts:
+            - {name: workspace, mountPath: /workspace}
+      volumes:
+        - name: workspace
+          configMap: {name: {{ .Values.apiName }}-api-initial-publish}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.apiName }}-api-initial-publish
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+data:
+  source-pvc.yaml: |
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests:
+          storage: 1Gi

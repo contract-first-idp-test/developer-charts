@@ -1,0 +1,40 @@
+domainName: retail
+systemName: orders
+groupId: com.example.retail.orders
+owner: group:default/retail-maintainers
+systemRepository:
+  url: https://tenant-gitea.example/retail-team/orders-system.git
+  revision: trunk
+environment:
+  name: sandbox
+  namespaceSuffix: -build
+  clusterDomain: apps.build.example
+delivery:
+  namespace: openshift-gitops
+  project: tenant-retail-orders
+  destinationServer: https://kubernetes.default.svc
+  charts:
+    repository: https://platform-gitea.example/platform-private/developer-charts.git
+    revision: release-2026-07
+environments:
+  order: [sandbox, stage, production]
+  definitions:
+    sandbox: {namespaceSuffix: -build, clusterDomain: apps.build.example}
+    stage: {namespaceSuffix: -preprod, clusterDomain: apps.stage.example}
+    production: {namespaceSuffix: "", clusterDomain: apps.example}
+registry:
+  host: quay.example
+  clusterId: west
+  credentials:
+    sourcePullSecretName: source-registry-auth
+    destinationPushSecretName: destination-registry-auth
+    runtimePullSecretName: runtime-registry-auth
+schemaRegistry:
+  apiUrl: https://registry.example/apis/registry/v3
+build:
+  environment: sandbox
+  namespaceSuffix: -build
+  sourceRevision: trunk
+  sccClusterRoleName: system:openshift:scc:pipelines-scc
+  deploymentUpdate:
+    strategy: restart

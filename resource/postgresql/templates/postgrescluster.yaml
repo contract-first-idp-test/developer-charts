@@ -1,0 +1,26 @@
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  name: {{ .Values.clusterName }}
+  labels:
+    contract-first-idp.github.io/system: {{ .Values.systemName | quote }}
+    contract-first-idp.github.io/resource: {{ .Values.resourceName | quote }}
+spec:
+  postgresVersion: {{ .Values.postgresVersion }}
+  instances:
+    - name: postgres
+      replicas: {{ .Values.instances.replicas }}
+      dataVolumeClaimSpec:
+        accessModes: [ReadWriteOnce]
+{{- if .Values.storage.storageClass }}
+        storageClassName: {{ .Values.storage.storageClass }}
+{{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}
+  users:
+    - name: {{ .Values.user.name }}
+      databases:
+        - {{ .Values.user.database }}
+      password:
+        type: AlphaNumeric

@@ -1,0 +1,48 @@
+systemName: example
+componentName: service
+environment: dev
+namespace: example-dev
+implementationProfile: quarkus-camel-openapi
+replicas: 1
+image:
+  repository: quay.example.invalid/example_example-dev/service
+  tag: latest
+  pullPolicy: Always
+runtime:
+  health:
+    readinessPath: /q/health/ready
+    livenessPath: /q/health/live
+    port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  imagePullSecretNames: []
+  envFromSecretNames: []
+  env: []
+route:
+  enabled: true
+promotion:
+  pipelineName: promote-image
+  serviceAccountName: image-promoter
+  sourceEnvironment: ""
+build:
+  enabled: false
+  serviceAccountName: pipeline
+  registryPushSecretName: builder-quay-openshift
+  environment: dev
+  repository: https://example.invalid/service.git
+  revision: main
+  dockerfilePath: ./src/main/docker/Dockerfile
+  imageRepository: quay.example.invalid/example_example-dev/service
+  deploymentUpdate:
+    strategy: restart
+  webhook:
+    signatureVerification:
+      enabled: false
+      secretName: ""

@@ -1,0 +1,43 @@
+domainName: example
+systemName: example
+groupId: io.github.cfidp.example
+owner: group:default/platform-engineering
+systemRepository:
+  url: https://example.invalid/example-system.git
+  revision: main
+environment:
+  name: dev
+  namespaceSuffix: -dev
+  clusterDomain: apps.dev.example.invalid
+delivery:
+  namespace: openshift-gitops
+  project: tenant-example-example
+  destinationServer: https://kubernetes.default.svc
+  charts:
+    repository: https://example.invalid/developer-charts.git
+    revision: v1.0.0
+environments:
+  order: [dev, test, prod]
+  definitions:
+    dev: {namespaceSuffix: -dev, clusterDomain: apps.dev.example.invalid}
+    test: {namespaceSuffix: -test, clusterDomain: apps.test.example.invalid}
+    prod: {namespaceSuffix: "", clusterDomain: apps.example.invalid}
+registry:
+  host: quay.example.invalid
+  clusterId: openshift
+  credentials:
+    sourcePullSecretName: default-quay-openshift
+    destinationPushSecretName: builder-quay-openshift
+    runtimePullSecretName: default-quay-openshift
+schemaRegistry:
+  apiUrl: https://apicurio.example.invalid/apis/registry/v3
+spectralRules:
+  repositoryUrl: https://example.invalid/spectral-rules.git
+  revision: v1.0.0
+  path: ruleset.yaml
+build:
+  environment: dev
+  namespaceSuffix: -dev
+  sourceRevision: main
+  sccClusterRoleName: system:openshift:scc:pipelines-scc
+  deploymentUpdate: {strategy: restart}

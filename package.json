@@ -1,0 +1,11 @@
+{
+  "name": "contract-first-idp-developer-charts",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "yaml": "^2.8.0"
+  }
+}

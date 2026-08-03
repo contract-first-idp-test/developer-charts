@@ -1,0 +1,89 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: {{ .Values.apiName }}-api
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+spec:
+  params:
+    - {name: git-url, type: string, default: {{ .Values.repository | quote }}}
+    - {name: git-revision, type: string, default: {{ .Values.revision | quote }}}
+    - {name: release-version, type: string, default: ""}
+  workspaces: [{name: source}]
+  tasks:
+    - name: clone
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: git-clone}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - {name: URL, value: $(params.git-url)}
+        - {name: REVISION, value: $(params.git-revision)}
+        - {name: DELETE_EXISTING, value: "true"}
+        - {name: SUBDIRECTORY, value: source}
+      workspaces: [{name: output, workspace: source}]
+    - name: clone-spectral-rules
+      runAfter: [clone]
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: git-clone}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - {name: URL, value: {{ .Values.spectralRules.repositoryUrl | quote }}}
+        - {name: REVISION, value: {{ .Values.spectralRules.revision | quote }}}
+        - {name: DELETE_EXISTING, value: "true"}
+        - {name: SUBDIRECTORY, value: spectral-rules}
+      workspaces: [{name: output, workspace: source}]
+    - name: spectral
+      runAfter: [clone-spectral-rules]
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: spectral-quality-gate}
+          - {name: namespace, value: tekton-tasks}
+      workspaces: [{name: source, workspace: source}]
+      params:
+        - {name: API_PATH, value: source/specification.yaml}
+        - {name: RULES_PATH, value: spectral-rules/{{ .Values.spectralRules.path }}}
+    - name: publish-git-version
+      runAfter: [spectral]
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: maven}
+          - {name: namespace, value: tekton-tasks}
+      workspaces: [{name: source, workspace: source, subPath: source}]
+      params:
+        - name: GOALS
+          value:
+            - io.apicurio:apicurio-registry-maven-plugin:3.2.5:register
+            - -Dregistry.version=$(tasks.clone.results.COMMIT)
+            - -Dregistry.ifExists=FIND_OR_CREATE_VERSION
+            - -B
+        - {name: JAVA_VERSION, value: "21"}
+    - name: publish-release-version
+      runAfter: [publish-git-version]
+      when:
+        - input: $(params.release-version)
+          operator: notin
+          values: [""]
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: maven}
+          - {name: namespace, value: tekton-tasks}
+      workspaces: [{name: source, workspace: source, subPath: source}]
+      params:
+        - name: GOALS
+          value:
+            - io.apicurio:apicurio-registry-maven-plugin:3.2.5:register
+            - -Dregistry.version=$(params.release-version)
+            - -Dregistry.ifExists=CREATE_VERSION
+            - -B
+        - {name: JAVA_VERSION, value: "21"}

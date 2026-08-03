@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["systemName", "componentName", "environment", "namespace", "image", "runtime", "promotion", "build"],
+  "properties": {
+    "systemName": {
+      "type": "string",
+      "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"
+    },
+    "componentName": {
+      "type": "string",
+      "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"
+    },
+    "environment": {
+      "type": "string",
+      "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"
+    },
+    "namespace": {
+      "type": "string",
+      "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"
+    },
+    "replicas": {"type": "integer", "minimum": 0},
+    "image": {
+      "type": "object",
+      "required": ["repository", "tag", "pullPolicy"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["health", "resources", "imagePullSecretNames", "envFromSecretNames", "env"],
+      "properties": {
+        "health": {
+          "type": "object",
+          "required": ["readinessPath", "livenessPath", "port", "initialDelaySeconds", "periodSeconds"]
+        },
+        "resources": {"type": "object"},
+        "imagePullSecretNames": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "envFromSecretNames": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "value"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "value": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "promotion": {
+      "type": "object",
+      "required": ["pipelineName", "serviceAccountName", "sourceEnvironment"],
+      "properties": {
+        "pipelineName": {"type": "string", "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"},
+        "serviceAccountName": {
+          "type": "string",
+          "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"
+        },
+        "sourceEnvironment": {
+          "type": "string",
+          "pattern": "^$|^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "required": ["enabled", "serviceAccountName", "registryPushSecretName"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "serviceAccountName": {
+          "type": "string",
+          "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"
+        },
+        "registryPushSecretName": {
+          "type": "string",
+          "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"
+        },
+        "environment": {
+          "type": "string",
+          "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"
+        }
+      }
+    }
+  }
+}
