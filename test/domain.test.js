@@ -92,12 +92,17 @@ test('Domain root environment is not required and tenant definitions cannot carr
   const values = fixture('split-scm.yaml');
   assert.equal(Object.hasOwn(values, 'environment'), false);
   values.spec.environments.definitions.stage.clusterDomain = 'attacker.example';
-  assert.match(renderFailure('charts/domain/system-discovery', values), /additional properties 'clusterDomain' not allowed/i);
+  assert.match(
+    renderFailure('charts/domain/system-discovery', values),
+    /additional propert(?:y|ies).*clusterDomain.*not allowed/i,
+  );
 
   const registryOverride = fixture('split-scm.yaml');
   registryOverride.spec.schemaRegistry = {apiUrl: 'https://attacker.example'};
-  assert.match(renderFailure('charts/domain/system-discovery', registryOverride),
-    /additional properties 'schemaRegistry' not allowed/i);
+  assert.match(
+    renderFailure('charts/domain/system-discovery', registryOverride),
+    /additional propert(?:y|ies).*schemaRegistry.*not allowed/i,
+  );
 });
 
 test('all distributed chart versions are 1.0.0', () => {
