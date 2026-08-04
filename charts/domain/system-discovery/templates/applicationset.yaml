@@ -98,6 +98,13 @@ spec:
       destination:
         server: {{ $.Values.spec.platform.argocd.destinationServer }}
         namespace: {{ $.Values.spec.platform.argocd.namespace }}
+      ignoreDifferences:
+        - group: ""
+          kind: ServiceAccount
+          jqPathExpressions:
+            - '.imagePullSecrets[]? | select(.name | test("-dockercfg-[a-z0-9]+$"))'
       syncPolicy:
         automated: {prune: true, selfHeal: true}
+        syncOptions:
+          - RespectIgnoreDifferences=true
 {{- end }}
