@@ -3,6 +3,21 @@ const fs = require('node:fs');
 const path = require('node:path');
 const YAML = require('yaml');
 const {fixture, lint, render, renderFailure, resource} = require('./helpers/helm');
+const {repositoryRoot: root} = require('./helpers/paths');
+
+test('keeps the private Node and Jest project entirely under test', () => {
+  for (const obsolete of ['package.json', 'package-lock.json', 'jest.config.js', 'node_modules']) {
+    assert.equal(fs.existsSync(path.join(root, obsolete)), false, obsolete);
+  }
+  const testPackage = JSON.parse(fs.readFileSync(path.join(root, 'test/package.json'), 'utf8'));
+  assert.deepEqual(
+    {name: testPackage.name, private: testPackage.private},
+    {name: 'developer-charts-tests', private: true},
+  );
+  for (const required of [
+    'test/package-lock.json', 'test/jest.config.js', 'test/helpers/paths.js',
+  ]) assert.equal(fs.existsSync(path.join(root, required)), true, required);
+});
 
 test('one Domain render creates discovery for every ordered environment', () => {
   const values = fixture('split-scm.yaml');
@@ -28,7 +43,6 @@ test('one Domain render creates discovery for every ordered environment', () => 
 });
 
 test('Domain chart reads target configuration from spec.platform', () => {
-  const root = path.resolve(__dirname, '..');
   const templates = [
     'charts/domain/system-discovery/templates/_helpers.tpl',
     'charts/domain/system-discovery/templates/applicationset.yaml',
@@ -106,7 +120,6 @@ test('Domain root environment is not required and tenant definitions cannot carr
 });
 
 test('all distributed chart versions are 1.0.0', () => {
-  const root = path.resolve(__dirname, '..');
   const charts = [
     'charts/domain/system-discovery', 'charts/system/environment',
     'charts/api/specification-build', 'charts/component/environment',
@@ -120,7 +133,6 @@ test('all distributed chart versions are 1.0.0', () => {
 });
 
 test('charts use the canonical entity and responsibility paths', () => {
-  const root = path.resolve(__dirname, '..');
   const discovered = fs.readdirSync(path.join(root, 'charts'), {recursive: true})
     .filter(relative => relative.endsWith('Chart.yaml'))
     .map(relative => path.join('charts', relative).replaceAll(path.sep, '/'))

@@ -90,11 +90,20 @@ copies are maintained at older paths.
 
 ## Quick validation
 
-The deterministic suite requires Node.js, npm, and Helm on `PATH`.
+The deterministic suite requires Node.js, npm, and Helm on `PATH`. GitHub Actions pins Helm
+`v3.17.3`. All Node and Jest tooling is scoped under `test/`; this repository is not an npm
+package.
 
 ```bash
-npm ci
-npm test
+helm version --short
+make test
+```
+
+The direct test-package equivalent is:
+
+```bash
+npm ci --prefix test
+npm test --prefix test
 ```
 
 The tests lint every chart, render representative build and promotion environments, parse the
@@ -189,8 +198,7 @@ nonstandard lifecycle names to prevent hidden assumptions.
 All deterministic checks use Jest and the singular `test/` tree:
 
 ```bash
-npm ci
-npm test
+make test
 ```
 
 ## Current limitations

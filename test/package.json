@@ -1,9 +1,9 @@
 {
-  "name": "contract-first-idp-developer-charts",
+  "name": "developer-charts-tests",
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "test": "jest --runInBand"
+    "test": "jest --runInBand --config jest.config.js"
   },
   "devDependencies": {
     "jest": "^29.7.0",

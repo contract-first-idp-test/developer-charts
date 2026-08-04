@@ -3,8 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const YAML = require('yaml');
-
-const root = path.resolve(__dirname, '../..');
+const {repositoryRoot: root} = require('./paths');
 
 function run(args, values) {
   const temporary = values

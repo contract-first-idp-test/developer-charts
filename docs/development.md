@@ -5,7 +5,7 @@ Use this guide when changing chart templates, schemas, platform contracts, or te
 ## Prerequisites
 
 - Node.js and npm
-- Helm on `PATH`
+- Helm on `PATH` (repository CI is pinned to `v3.17.3`)
 - A sibling `software-templates` checkout only for the optional producer/consumer compatibility
   test
 
@@ -14,9 +14,12 @@ No live cluster is required for the default suite.
 ## Run the chart suite
 
 ```bash
-npm ci
-npm test
+helm version --short
+make test
 ```
+
+All Node and Jest tooling is scoped under `test/`; this repository itself is not an npm package.
+The direct equivalent is `npm ci --prefix test` followed by `npm test --prefix test`.
 
 The Jest test runner:
 
@@ -57,9 +60,15 @@ sibling repository, run:
 
 ```bash
 cd ../software-templates
-npm ci
-DEVELOPER_CHARTS_DIR=../developer-charts npm run test:chart-compat
+npm ci --prefix test
+DEVELOPER_CHARTS_DIR=../developer-charts \
+PLATFORM_COMPONENTS_DIR=../platform-components \
+npm run --prefix test test:compatibility
 ```
+
+The three sibling repositories form a contributor integration workspace. Workshop installers
+normally fork only `platform-components` and consume released chart dependencies, so they do not
+need to clone this workspace or run coordinated current-source tests.
 
 Run this whenever changing a values key, discovery path, Domain entrypoint, or leaf chart input.
 
@@ -71,6 +80,6 @@ Run this whenever changing a values key, discovery path, Domain entrypoint, or l
 - Test both build and non-build environments when lifecycle logic changes.
 - Test an adjacent promotion and reject mutable or non-adjacent release inputs.
 - Verify only build-environment renders create derived AppProjects.
-- Run `npm test`.
+- Run `make test`.
 - Run the template compatibility suite when producer inputs change.
 - Update the chart README and architecture guide for operating or ownership changes.
