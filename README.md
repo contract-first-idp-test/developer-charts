@@ -1,49 +1,56 @@
-# Contract-First IDP developer charts
+# Contract-First IDP Developer Charts
 
-Reusable Helm charts that turn tenant Git state into OpenShift runtime resources.
+Turn small, reviewed tenant configuration files into predictable OpenShift resources.
 
-All distributed charts in this initial coordinated baseline use chart version `1.0.0` and are
-consumed from repository revision `v1.0.0`.
+These reusable Helm charts are the runtime layer of Contract-First IDP. Argo CD uses them to
+discover tenant Git state and reconcile namespaces, pipelines, registry infrastructure, workloads,
+and managed Resources. Developers describe what they need; platform engineers own how it runs.
 
-This repository is the platform implementation layer of Contract-First IDP. The companion
-`software-templates` repository captures developer intent as small, reviewable files. These charts
-discover those files through Argo CD ApplicationSets and reconcile namespaces, pipelines, registry
-infrastructure, workloads, and managed Resources.
+## Start here
 
-## Why this repository exists
+- **Learning the chart flow:** read the [architecture guide](docs/architecture.md).
+- **Preparing a cluster:** work through the [platform requirements](docs/platform-requirements.md).
+- **Testing a change:** begin with [quick validation](#quick-validation), then see
+  [development and testing](docs/development.md).
+- **Running the charts:** use the [operations guide](docs/operations.md).
 
-Tenant Git says what a team wants, but it should not let every tenant redefine how the platform
-builds software, accesses registries, grants cross-namespace permissions, or provisions managed
-services. This repository provides that trusted interpretation in one platform-owned,
-version-controlled implementation.
+If you want to install the complete workshop platform, start in `platform-components`. Tenant
+developers normally interact with the golden paths from `software-templates` rather than using
+these charts directly.
 
-Keeping the charts separate from `software-templates` means:
+The contract between templates and charts is ordinary Git content. That separation lets platform
+engineers evolve runtime policy without regenerating tenant repositories, and it keeps deployment
+behavior visible as rendered Helm output.
 
-- platform engineers can update runtime policy without regenerating every tenant workload
-  repository;
-- tenants can request supported capabilities without selecting arbitrary chart repositories or
-  embedding infrastructure credentials;
-- Argo CD can reconcile the same reviewed intent repeatedly and recover after transient failures;
-- the template-to-chart interface can be validated as a contract;
-- deployment behavior remains inspectable Helm output rather than hidden Backstage side effects.
+## Quick validation
 
-The repository is successful when the same tenant and platform revisions render deterministic,
-explainable cluster state and when platform changes can be evaluated before adoption by tenant
-entrypoints.
+You need Node.js, npm, and Helm on `PATH`. GitHub Actions uses Helm `v3.17.3`.
 
-This repository deliberately does **not**:
+```bash
+helm version --short
+make test
+```
 
-- collect developer input or create catalog entities and source repositories;
-- mutate tenant Git or decide that a release should be promoted;
-- create SCM organizations, teams, or source credentials;
-- install OpenShift GitOps, Pipelines, Quay Bridge, Schema Registry, or Resource operators;
-- serve as an unrestricted mechanism for tenants to run arbitrary charts.
+The direct test-package equivalent is:
 
-Entity-producing repositories use `/catalog-info.yaml`; these charts consume the platform and
-tenant values derived from that root catalog convention but do not publish catalog entities.
+```bash
+npm ci --prefix test
+npm test --prefix test
+```
 
-> **New to the charts?** Read the [architecture guide](docs/architecture.md), then validate your
-> platform against the [requirements checklist](docs/platform-requirements.md).
+The tests lint every chart, render representative build and promotion environments, and verify the
+resulting contracts. They need neither a live cluster nor a `software-templates` checkout.
+
+To inspect one chart while working:
+
+```bash
+helm lint charts/domain/system-discovery
+helm template tenant-domain charts/domain/system-discovery \
+  -f /path/to/merged-target-and-domain-entities.yaml
+```
+
+All test tooling lives under `test/`; this repository itself is not an npm package. See
+[Development and testing](docs/development.md) for the full test matrix.
 
 ## Architecture at a glance
 
@@ -64,10 +71,16 @@ flowchart TD
     resource --> platform
 ```
 
-The Domain chart runs once and creates discovery controllers for all ordered environments. Each System chart independently
-discovers Component infrastructure, Component releases, and Resources; the build-environment
-instance also discovers APIs. Leaf charts create the runtime objects. No chart mutates a tenant
-repository.
+The Domain chart creates discovery controllers for the tenant's ordered environments. Each System
+chart then discovers APIs, Components, releases, and Resources for its environment. Leaf charts
+create the runtime objects. No chart mutates a tenant repository.
+
+All distributed charts in this coordinated release use chart version `1.0.0` and are consumed from
+repository revision `v1.0.0`.
+
+These charts do not collect developer input, create source repositories, install the platform
+operators, or choose when a release should be promoted. Those responsibilities remain with
+`software-templates`, `platform-components`, and tenant Git review.
 
 ## Why the charts are separate
 
@@ -87,39 +100,6 @@ Charts are grouped by Backstage catalog entity kind. Component environment and r
 separate because registry provisioning and release selection are independent lifecycle signals.
 The canonical repository convention is `charts/<entity>/<responsibility>`; no compatibility chart
 copies are maintained at older paths.
-
-## Quick validation
-
-The deterministic suite requires Node.js, npm, and Helm on `PATH`. GitHub Actions pins Helm
-`v3.17.3`. All Node and Jest tooling is scoped under `test/`; this repository is not an npm
-package.
-
-```bash
-helm version --short
-make test
-```
-
-The direct test-package equivalent is:
-
-```bash
-npm ci --prefix test
-npm test --prefix test
-```
-
-The tests lint every chart, render representative build and promotion environments, parse the
-resulting multi-document YAML, and assert platform contracts. They require neither a live cluster
-nor the `software-templates` checkout.
-
-Lint or render one chart during development:
-
-```bash
-helm lint charts/domain/system-discovery
-helm template tenant-domain charts/domain/system-discovery \
-  -f /path/to/merged-target-and-domain-entities.yaml
-```
-
-See [Development and testing](docs/development.md) for the full test matrix and cross-repository
-compatibility checks.
 
 ## Reconciliation contracts
 
