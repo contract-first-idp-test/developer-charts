@@ -26,6 +26,6 @@ repository or revision.
 ## Validate
 
 ```bash
-helm lint resource/postgresql
-helm template example-db resource/postgresql -f /path/to/postgresql-values.yaml
+helm lint charts/resource/postgresql
+helm template example-db charts/resource/postgresql -f /path/to/postgresql-values.yaml
 ```

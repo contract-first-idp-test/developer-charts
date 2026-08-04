@@ -27,7 +27,7 @@ spec:
       sources:
         - repoURL: {{ .Values.delivery.charts.repository }}
           targetRevision: {{ .Values.delivery.charts.revision }}
-          path: api/specification-build
+          path: charts/api/specification-build
           helm:
             valueFiles: ['$values/apis/{{ "{{ index .path.segments 1 }}" }}/values.yaml']
             valuesObject:

@@ -39,6 +39,9 @@ This repository deliberately does **not**:
 - install OpenShift GitOps, Pipelines, Quay Bridge, Schema Registry, or Resource operators;
 - serve as an unrestricted mechanism for tenants to run arbitrary charts.
 
+Entity-producing repositories use `/catalog-info.yaml`; these charts consume the platform and
+tenant values derived from that root catalog convention but do not publish catalog entities.
+
 > **New to the charts?** Read the [architecture guide](docs/architecture.md), then validate your
 > platform against the [requirements checklist](docs/platform-requirements.md).
 
@@ -73,15 +76,17 @@ lifecycle from forcing unrelated resources to appear or rerun.
 
 | Chart | Why it exists separately | Responsibility | Detailed guide |
 | --- | --- | --- | --- |
-| `domain` | Keeps tenant-wide lifecycle policy above application concerns | Discover active Systems across all Domain environments | [`domain/README.md`](domain/README.md) |
-| `system` | Centralizes shared namespace, project, discovery, and promotion policy | Create the System scope and leaf ApplicationSets | [`system/README.md`](system/README.md) |
-| `api/specification-build` | Gives contracts a publication lifecycle independent of workloads | Validate and publish OpenAPI contracts | [`api/specification-build/README.md`](api/specification-build/README.md) |
-| `component/environment` | Allows registry infrastructure to exist before a release is selected | Create the environment-local ImageStream | [`component/environment/README.md`](component/environment/README.md) |
-| `component/runtime` | Lets artifact selection drive runtime and promotion without owning registry provisioning | Reconcile runtime, build, webhook, and release-launcher resources | [`component/runtime/README.md`](component/runtime/README.md) |
-| `resource/postgresql` | Encapsulates one trusted implementation behind the generic Resource contract | Create a Crunchy `PostgresCluster` | [`resource/postgresql/README.md`](resource/postgresql/README.md) |
+| `charts/domain/system-discovery` | Keeps tenant-wide lifecycle policy above application concerns | Discover active Systems across all Domain environments | [`charts/domain/system-discovery/README.md`](charts/domain/system-discovery/README.md) |
+| `charts/system/environment` | Centralizes shared namespace, project, discovery, and promotion policy | Create the System scope and leaf ApplicationSets | [`charts/system/environment/README.md`](charts/system/environment/README.md) |
+| `charts/api/specification-build` | Gives contracts a publication lifecycle independent of workloads | Validate and publish OpenAPI contracts | [`charts/api/specification-build/README.md`](charts/api/specification-build/README.md) |
+| `charts/component/environment` | Allows registry infrastructure to exist before a release is selected | Create the environment-local ImageStream | [`charts/component/environment/README.md`](charts/component/environment/README.md) |
+| `charts/component/runtime` | Lets artifact selection drive runtime and promotion without owning registry provisioning | Reconcile runtime, build, webhook, and release-launcher resources | [`charts/component/runtime/README.md`](charts/component/runtime/README.md) |
+| `charts/resource/postgresql` | Encapsulates one trusted implementation behind the generic Resource contract | Create a Crunchy `PostgresCluster` | [`charts/resource/postgresql/README.md`](charts/resource/postgresql/README.md) |
 
 Charts are grouped by Backstage catalog entity kind. Component environment and runtime concerns are
 separate because registry provisioning and release selection are independent lifecycle signals.
+The canonical repository convention is `charts/<entity>/<responsibility>`; no compatibility chart
+copies are maintained at older paths.
 
 ## Quick validation
 
@@ -99,8 +104,9 @@ nor the `software-templates` checkout.
 Lint or render one chart during development:
 
 ```bash
-helm lint domain
-helm template tenant-domain domain -f /path/to/merged-target-and-domain-entities.yaml
+helm lint charts/domain/system-discovery
+helm template tenant-domain charts/domain/system-discovery \
+  -f /path/to/merged-target-and-domain-entities.yaml
 ```
 
 See [Development and testing](docs/development.md) for the full test matrix and cross-repository
@@ -169,16 +175,23 @@ Use [Operations and troubleshooting](docs/operations.md) for:
 
 | Path | Purpose |
 | --- | --- |
-| [`domain/`](domain/) | Domain discovery and controller project |
-| [`system/`](system/) | System discovery, namespace, project, build RBAC, and promotion engine |
-| [`api/specification-build/`](api/specification-build/) | OpenAPI validation and publication |
-| [`component/environment/`](component/environment/) | Environment-local ImageStream |
-| [`component/runtime/`](component/runtime/) | Component build, release, promotion launcher, and runtime |
-| [`resource/postgresql/`](resource/postgresql/) | PostgreSQL Resource implementation |
+| [`charts/domain/system-discovery/`](charts/domain/system-discovery/) | Domain discovery and controller project |
+| [`charts/system/environment/`](charts/system/environment/) | System discovery, namespace, project, build RBAC, and promotion engine |
+| [`charts/api/specification-build/`](charts/api/specification-build/) | OpenAPI validation and publication |
+| [`charts/component/environment/`](charts/component/environment/) | Environment-local ImageStream |
+| [`charts/component/runtime/`](charts/component/runtime/) | Component build, release, promotion launcher, and runtime |
+| [`charts/resource/postgresql/`](charts/resource/postgresql/) | PostgreSQL Resource implementation |
 | [`test/`](test/) | Rendered contract tests and fixtures |
 
 Every chart includes a `values.schema.json`. Tests intentionally use split platform/tenant SCM and
 nonstandard lifecycle names to prevent hidden assumptions.
+
+All deterministic checks use Jest and the singular `test/` tree:
+
+```bash
+npm ci
+npm test
+```
 
 ## Current limitations
 

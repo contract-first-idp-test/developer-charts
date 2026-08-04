@@ -231,7 +231,7 @@ Tenant state selects a supported profile and implementation path:
 ```yaml
 profile: postgresql
 implementation:
-  path: resource/postgresql
+  path: charts/resource/postgresql
 ```
 
 The System chart injects the trusted platform repository and revision. The current PostgreSQL

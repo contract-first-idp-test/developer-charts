@@ -25,9 +25,9 @@ credentials; this chart creates neither credentials nor a `QuayIntegration`.
 ## Validate
 
 ```bash
-helm lint component/environment
-helm template example-component component/environment -f /path/to/environment-values.yaml
+helm lint charts/component/environment
+helm template example-component charts/component/environment -f /path/to/environment-values.yaml
 ```
 
-See [Platform requirements](../../docs/platform-requirements.md#quay-bridge) for the expected Quay
+See [Platform requirements](../../../docs/platform-requirements.md#quay-bridge) for the expected Quay
 integration.

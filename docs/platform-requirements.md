@@ -91,7 +91,7 @@ spec:
           runtimePullSecretName: default-quay-openshift
 ```
 
-The `component/environment` chart creates an ImageStream for each active Component environment.
+The `charts/component/environment` chart creates an ImageStream for each active Component environment.
 Quay Bridge responds by provisioning the environment-local repository and robot credentials.
 
 Confirm that:

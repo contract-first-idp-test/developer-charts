@@ -18,7 +18,7 @@ npm ci
 npm test
 ```
 
-The Node test runner:
+The Jest test runner:
 
 - lints all charts;
 - renders representative build and non-build environments;
@@ -33,18 +33,19 @@ The Node test runner:
 Lint an individual chart:
 
 ```bash
-helm lint domain
-helm lint system
-helm lint component/environment
-helm lint component/runtime
-helm lint api/specification-build
-helm lint resource/postgresql
+helm lint charts/domain/system-discovery
+helm lint charts/system/environment
+helm lint charts/component/environment
+helm lint charts/component/runtime
+helm lint charts/api/specification-build
+helm lint charts/resource/postgresql
 ```
 
 Render with explicit values:
 
 ```bash
-helm template tenant-domain domain -f /path/to/merged-target-and-domain-entities.yaml
+helm template tenant-domain charts/domain/system-discovery \
+  -f /path/to/merged-target-and-domain-entities.yaml
 ```
 
 Keep example values valid against each chart's `values.schema.json`.

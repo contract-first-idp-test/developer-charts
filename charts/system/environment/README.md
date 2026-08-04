@@ -70,9 +70,9 @@ scoped read. RBAC grants no reverse, non-adjacent, or cross-namespace PipelineRu
 ## Validate
 
 ```bash
-helm lint system
-helm template tenant-system system -f /path/to/system-values.yaml
+helm lint charts/system/environment
+helm template tenant-system charts/system/environment -f /path/to/system-values.yaml
 ```
 
-See [Architecture](../docs/architecture.md#image-promotion) and
-[Operations](../docs/operations.md#promotion-pipeline-failures) for the full promotion model.
+See [Architecture](../../../docs/architecture.md#image-promotion) and
+[Operations](../../../docs/operations.md#promotion-pipeline-failures) for the full promotion model.

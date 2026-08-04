@@ -1,17 +1,16 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const test = require('node:test');
 const YAML = require('yaml');
 const {chartValues, lint, render, resource} = require('./helpers/helm');
 
 test('API specification build lints and configures distinct main and release publication', () => {
-  const values = chartValues('api/specification-build');
+  const values = chartValues('charts/api/specification-build');
   assert.equal(values.serviceAccountName, 'pipeline');
   values.serviceAccountName = 'orders-build';
   values.apiName = 'orders';
-  lint('api/specification-build', values);
-  const resources = render('api/specification-build', values);
+  lint('charts/api/specification-build', values);
+  const resources = render('charts/api/specification-build', values);
 
   const pipeline = resource(resources, 'Pipeline', 'orders-api');
   const listener = resource(resources, 'EventListener', 'orders-api');
@@ -46,7 +45,7 @@ test('API specification build lints and configures distinct main and release pub
     task => task.name === 'publish-git-version').runAfter, ['spectral']);
 
   const pipelineSource = fs.readFileSync(path.resolve(
-    __dirname, '../api/specification-build/templates/pipeline.yaml'), 'utf8');
+    __dirname, '../charts/api/specification-build/templates/pipeline.yaml'), 'utf8');
   assert.doesNotMatch(pipelineSource, /mikefarah\/yq|\byq\s+-[er]|validate-yaml/);
   assert.doesNotMatch(pipelineSource, /taskSpec:/);
   assert.equal(pipeline.spec.tasks.filter(task =>

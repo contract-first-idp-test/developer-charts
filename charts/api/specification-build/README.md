@@ -65,9 +65,9 @@ Maven Task.
 ## Validate
 
 ```bash
-helm lint api/specification-build
-helm template example-api api/specification-build -f /path/to/api-values.yaml
+helm lint charts/api/specification-build
+helm template example-api charts/api/specification-build -f /path/to/api-values.yaml
 ```
 
-See [Operations](../../docs/operations.md#initial-api-publication) for failure checks and retry
+See [Operations](../../../docs/operations.md#initial-api-publication) for failure checks and retry
 behavior.

@@ -33,7 +33,7 @@ spec:
       sources:
         - repoURL: {{ .Values.delivery.charts.repository }}
           targetRevision: {{ .Values.delivery.charts.revision }}
-          path: component/runtime
+          path: charts/component/runtime
           helm:
             valueFiles:
               - '$values/components/{{ "{{ index .path.segments 1 }}" }}/values.yaml'

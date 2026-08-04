@@ -1,12 +1,11 @@
 const assert = require('node:assert/strict');
-const test = require('node:test');
 const YAML = require('yaml');
 const {
   chartValues, lint, render, renderFailure, resource,
 } = require('./helpers/helm');
 
 function buildValues() {
-  const values = chartValues('component/runtime');
+  const values = chartValues('charts/component/runtime');
   assert.equal(values.implementationProfile, 'quarkus-camel-openapi');
   assert.deepEqual(values.runtime.health, {
     readinessPath: '/q/health/ready',
@@ -38,8 +37,8 @@ function promotionValues(tag = 'v1.2.3') {
 
 test('component runtime lints and renders build and runtime contracts', () => {
   const values = buildValues();
-  lint('component/runtime', values);
-  const resources = render('component/runtime', values);
+  lint('charts/component/runtime', values);
+  const resources = render('charts/component/runtime', values);
   const pipeline = resource(resources, 'Pipeline', 'checkout');
   const taskNames = pipeline.spec.tasks.map(task => task.name);
   assert.ok(taskNames.includes('package'));
@@ -59,9 +58,9 @@ test('component runtime lints and renders build and runtime contracts', () => {
 });
 
 test('non-build runtime omits build resources and produces stable release launchers', () => {
-  const first = render('component/runtime', promotionValues('v1.2.3'));
-  const second = render('component/runtime', promotionValues('v1.2.3'));
-  const changed = render('component/runtime', promotionValues('v1.2.4'));
+  const first = render('charts/component/runtime', promotionValues('v1.2.3'));
+  const second = render('charts/component/runtime', promotionValues('v1.2.3'));
+  const changed = render('charts/component/runtime', promotionValues('v1.2.4'));
   const firstJob = resource(first, 'Job');
   const secondJob = resource(second, 'Job');
   const changedJob = resource(changed, 'Job');
@@ -76,6 +75,6 @@ test('non-build runtime omits build resources and produces stable release launch
 });
 
 test('component promotion rejects mutable latest outside the build environment', () => {
-  assert.match(renderFailure('component/runtime', promotionValues('latest')),
+  assert.match(renderFailure('charts/component/runtime', promotionValues('latest')),
     /promotion requires an immutable human release/);
 });

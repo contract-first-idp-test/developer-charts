@@ -53,7 +53,7 @@ spec:
       sources:
         - repoURL: {{ $platformChartsRepository }}
           targetRevision: {{ $.Values.spec.platform.charts.revision }}
-          path: system
+          path: charts/system/environment
           helm:
             valuesObject:
               domainName: {{ $.Values.metadata.name | quote }}

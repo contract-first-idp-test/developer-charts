@@ -1,5 +1,4 @@
 const assert = require('node:assert/strict');
-const test = require('node:test');
 const YAML = require('yaml');
 const {fixture, lint, render, resource} = require('./helpers/helm');
 
@@ -12,15 +11,15 @@ function appSet(resources, suffix) {
 
 test('system lints and renders the namespace and chart discovery contracts', () => {
   const values = fixture('nonstandard-lifecycle.yaml');
-  lint('system', values);
-  const resources = render('system', values);
+  lint('charts/system/environment', values);
+  const resources = render('charts/system/environment', values);
   resource(resources, 'Namespace', 'orders-build');
   resource(resources, 'AppProject', 'tenant-retail-orders');
 
   const expected = [
-    ['-api-builds', 'apis/*/values.yaml', 'api/specification-build'],
-    ['-components', 'components/*/releases/sandbox.yaml', 'component/runtime'],
-    ['-component-environments', 'components/*/environments/sandbox.yaml', 'component/environment'],
+    ['-api-builds', 'apis/*/values.yaml', 'charts/api/specification-build'],
+    ['-components', 'components/*/releases/sandbox.yaml', 'charts/component/runtime'],
+    ['-component-environments', 'components/*/environments/sandbox.yaml', 'charts/component/environment'],
     ['-resources', 'resources/*/*/environments/sandbox.yaml', '{{ .implementation.path }}'],
   ];
   for (const [suffix, discoveryPath, chartPath] of expected) {
@@ -89,7 +88,7 @@ test('system lints and renders the namespace and chart discovery contracts', () 
 
 test('system limits build and promotion access to the environments that need it', () => {
   const buildValues = fixture('nonstandard-lifecycle.yaml');
-  const buildResources = render('system', buildValues);
+  const buildResources = render('charts/system/environment', buildValues);
   resource(buildResources, 'ServiceAccount', 'orders-build');
   assert.equal(buildResources.some(item => item.kind === 'Secret'), false);
 
@@ -99,7 +98,7 @@ test('system limits build and promotion access to the environments that need it'
     namespaceSuffix: '-preprod',
     clusterDomain: 'apps.stage.example',
   };
-  const stageResources = render('system', stageValues);
+  const stageResources = render('charts/system/environment', stageValues);
   assert.equal(stageResources.some(item =>
     item.kind === 'ServiceAccount' && item.metadata.name === 'orders-build'), false);
   assert.equal(stageResources.some(item => item.kind === 'AppProject'), false);

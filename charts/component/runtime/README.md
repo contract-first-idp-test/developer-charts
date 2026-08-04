@@ -2,7 +2,7 @@
 
 Reconciles one released Component runtime and, when enabled, its build and release automation.
 
-The separate [`component/environment`](../environment/README.md) chart owns the ImageStream for
+The separate [`charts/component/environment`](../environment/README.md) chart owns the ImageStream for
 every active environment, so registry provisioning does not depend on release presence.
 
 ## Rendered capabilities
@@ -58,7 +58,7 @@ the Component, target environment, and human release version. The launcher:
 Deployment and promotion converge independently, so temporary `ImagePullBackOff` is expected while
 the image is copied.
 
-See [Operations](../../docs/operations.md#promotion-launcher-failures) for safe retry procedures.
+See [Operations](../../../docs/operations.md#promotion-launcher-failures) for safe retry procedures.
 
 ## Runtime configuration
 
@@ -85,6 +85,6 @@ chart.
 ## Validate
 
 ```bash
-helm lint component/runtime
-helm template example-component component/runtime -f /path/to/runtime-values.yaml
+helm lint charts/component/runtime
+helm template example-component charts/component/runtime -f /path/to/runtime-values.yaml
 ```

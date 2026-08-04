@@ -1,14 +1,13 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const test = require('node:test');
 const YAML = require('yaml');
 const {fixture, lint, render, renderFailure, resource} = require('./helpers/helm');
 
 test('one Domain render creates discovery for every ordered environment', () => {
   const values = fixture('split-scm.yaml');
-  lint('domain', values);
-  const resources = render('domain', values);
+  lint('charts/domain/system-discovery', values);
+  const resources = render('charts/domain/system-discovery', values);
   resource(resources, 'AppProject', 'tenant-retail');
   const applicationSets = resources.filter(item => item.kind === 'ApplicationSet');
   assert.deepEqual(applicationSets.map(item => item.metadata.name), [
@@ -21,19 +20,24 @@ test('one Domain render creates discovery for every ordered environment', () => 
     'systems/*/environments/stage.yaml',
     'systems/*/environments/production.yaml',
   ]);
+  assert.deepEqual(applicationSets.map(item => item.spec.template.spec.sources[0].path), [
+    'charts/system/environment',
+    'charts/system/environment',
+    'charts/system/environment',
+  ]);
 });
 
 test('Domain chart reads target configuration from spec.platform', () => {
   const root = path.resolve(__dirname, '..');
   const templates = [
-    'domain/templates/_helpers.tpl',
-    'domain/templates/applicationset.yaml',
-    'domain/templates/appproject.yaml',
+    'charts/domain/system-discovery/templates/_helpers.tpl',
+    'charts/domain/system-discovery/templates/applicationset.yaml',
+    'charts/domain/system-discovery/templates/appproject.yaml',
   ].map(relative => fs.readFileSync(path.join(root, relative), 'utf8')).join('\n');
   assert.match(templates, /\.Values\.spec\.platform/);
   assert.doesNotMatch(templates, /\.Values\.platform/);
   const schema = YAML.parse(fs.readFileSync(
-    path.join(root, 'domain/values.schema.json'), 'utf8'));
+    path.join(root, 'charts/domain/system-discovery/values.schema.json'), 'utf8'));
   assert.ok(schema.properties.spec.required.includes('platform'));
   assert.deepEqual(schema.properties.spec.properties.type, {
     type: 'string',
@@ -45,7 +49,7 @@ test('Domain chart reads target configuration from spec.platform', () => {
 
 test('Domain uses tenant identity and trusted platform inputs', () => {
   const values = fixture('split-scm.yaml');
-  const applicationSet = resource(render('domain', values), 'ApplicationSet',
+  const applicationSet = resource(render('charts/domain/system-discovery', values), 'ApplicationSet',
     'retail-stage-systems');
   const generator = applicationSet.spec.generators[0].git;
   const application = applicationSet.spec.template.spec;
@@ -76,11 +80,11 @@ test('Domain uses tenant identity and trusted platform inputs', () => {
 test('Domain rejects incomplete or invalid lifecycle policy', () => {
   const missing = fixture('split-scm.yaml');
   delete missing.spec.environments.definitions.stage;
-  assert.match(renderFailure('domain', missing), /ordered environment "stage" has no definition/);
+  assert.match(renderFailure('charts/domain/system-discovery', missing), /ordered environment "stage" has no definition/);
 
   const invalidOrder = fixture('split-scm.yaml');
   invalidOrder.spec.environments.build = 'stage';
-  assert.match(renderFailure('domain', invalidOrder),
+  assert.match(renderFailure('charts/domain/system-discovery', invalidOrder),
     /build environment must be first in the ordered promotion lifecycle/);
 });
 
@@ -88,23 +92,40 @@ test('Domain root environment is not required and tenant definitions cannot carr
   const values = fixture('split-scm.yaml');
   assert.equal(Object.hasOwn(values, 'environment'), false);
   values.spec.environments.definitions.stage.clusterDomain = 'attacker.example';
-  assert.match(renderFailure('domain', values), /additional properties 'clusterDomain' not allowed/i);
+  assert.match(renderFailure('charts/domain/system-discovery', values), /additional properties 'clusterDomain' not allowed/i);
 
   const registryOverride = fixture('split-scm.yaml');
   registryOverride.spec.schemaRegistry = {apiUrl: 'https://attacker.example'};
-  assert.match(renderFailure('domain', registryOverride),
+  assert.match(renderFailure('charts/domain/system-discovery', registryOverride),
     /additional properties 'schemaRegistry' not allowed/i);
 });
 
 test('all distributed chart versions are 1.0.0', () => {
   const root = path.resolve(__dirname, '..');
   const charts = [
-    'domain', 'system', 'api/specification-build', 'component/environment',
-    'component/runtime', 'resource/postgresql',
+    'charts/domain/system-discovery', 'charts/system/environment',
+    'charts/api/specification-build', 'charts/component/environment',
+    'charts/component/runtime', 'charts/resource/postgresql',
   ];
   for (const chart of charts) {
     const metadata = YAML.parse(fs.readFileSync(path.join(root, chart, 'Chart.yaml'), 'utf8'));
     assert.equal(metadata.version, '1.0.0', chart);
     if (metadata.appVersion !== undefined) assert.equal(metadata.appVersion, '1.0.0', chart);
   }
+});
+
+test('charts use the canonical entity and responsibility paths', () => {
+  const root = path.resolve(__dirname, '..');
+  const discovered = fs.readdirSync(path.join(root, 'charts'), {recursive: true})
+    .filter(relative => relative.endsWith('Chart.yaml'))
+    .map(relative => path.join('charts', relative).replaceAll(path.sep, '/'))
+    .sort();
+  expect(discovered).toEqual([
+    'charts/api/specification-build/Chart.yaml',
+    'charts/component/environment/Chart.yaml',
+    'charts/component/runtime/Chart.yaml',
+    'charts/domain/system-discovery/Chart.yaml',
+    'charts/resource/postgresql/Chart.yaml',
+    'charts/system/environment/Chart.yaml',
+  ]);
 });

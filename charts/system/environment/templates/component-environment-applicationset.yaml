@@ -26,7 +26,7 @@ spec:
       source:
         repoURL: {{ .Values.delivery.charts.repository }}
         targetRevision: {{ .Values.delivery.charts.revision }}
-        path: component/environment
+        path: charts/component/environment
         helm:
           valuesObject:
             systemName: {{ .Values.systemName }}
