@@ -1,4 +1,4 @@
-# API specification-build chart
+# OpenAPI chart
 
 Validates one API repository and publishes its complete OpenAPI document to the platform Schema
 Registry.
@@ -65,8 +65,8 @@ Maven Task.
 ## Validate
 
 ```bash
-helm lint charts/api/specification-build
-helm template example-api charts/api/specification-build -f /path/to/api-values.yaml
+helm lint charts/api/openapi
+helm template example-api charts/api/openapi -f /path/to/api-values.yaml
 ```
 
 See [Operations](../../../docs/operations.md#initial-api-publication) for failure checks and retry

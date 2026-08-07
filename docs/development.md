@@ -36,18 +36,17 @@ The Jest test runner:
 Lint an individual chart:
 
 ```bash
-helm lint charts/domain/system-discovery
+helm lint charts/domain/environment
 helm lint charts/system/environment
-helm lint charts/component/environment
-helm lint charts/component/runtime
-helm lint charts/api/specification-build
+helm lint charts/component/openjdk
+helm lint charts/api/openapi
 helm lint charts/resource/postgresql
 ```
 
 Render with explicit values:
 
 ```bash
-helm template tenant-domain charts/domain/system-discovery \
+helm template tenant-domain charts/domain/environment \
   -f /path/to/merged-target-and-domain-entities.yaml
 ```
 

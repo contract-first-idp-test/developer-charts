@@ -5,7 +5,7 @@ const {
 } = require('./helpers/helm');
 
 function buildValues() {
-  const values = chartValues('charts/component/runtime');
+  const values = chartValues('charts/component/openjdk');
   assert.equal(values.implementationProfile, 'quarkus-camel-openapi');
   assert.deepEqual(values.runtime.health, {
     readinessPath: '/q/health/ready',
@@ -20,6 +20,7 @@ function buildValues() {
   values.environment = 'sandbox';
   values.build.enabled = true;
   values.build.environment = 'sandbox';
+  values.image.tag = 'latest';
   values.runtime.imagePullSecretNames = ['runtime-pull-auth'];
   values.runtime.envFromSecretNames = ['checkout-runtime'];
   return values;
@@ -35,10 +36,26 @@ function promotionValues(tag = 'v1.2.3') {
   return values;
 }
 
-test('component runtime lints and renders build and runtime contracts', () => {
+test('environment-only OpenJDK state creates an ImageStream without a workload', () => {
+  const values = chartValues('charts/component/openjdk');
+  values.systemName = 'orders';
+  values.componentName = 'checkout';
+  values.namespace = 'orders-preprod';
+  values.environment = 'stage';
+  values.build.enabled = false;
+  values.build.environment = 'sandbox';
+
+  lint('charts/component/openjdk', values);
+  const resources = render('charts/component/openjdk', values);
+  resource(resources, 'ImageStream', 'checkout');
+  assert.deepEqual(resources.map(item => item.kind), ['ImageStream']);
+});
+
+test('OpenJDK chart renders build and latest runtime contracts', () => {
   const values = buildValues();
-  lint('charts/component/runtime', values);
-  const resources = render('charts/component/runtime', values);
+  lint('charts/component/openjdk', values);
+  const resources = render('charts/component/openjdk', values);
+  resource(resources, 'ImageStream', 'checkout');
   const pipeline = resource(resources, 'Pipeline', 'checkout');
   const taskNames = pipeline.spec.tasks.map(task => task.name);
   assert.ok(taskNames.includes('package'));
@@ -57,10 +74,12 @@ test('component runtime lints and renders build and runtime contracts', () => {
   assert.equal(resources.some(item => item.kind === 'Secret'), false);
 });
 
-test('non-build runtime omits build resources and produces stable release launchers', () => {
-  const first = render('charts/component/runtime', promotionValues('v1.2.3'));
-  const second = render('charts/component/runtime', promotionValues('v1.2.3'));
-  const changed = render('charts/component/runtime', promotionValues('v1.2.4'));
+test('promoted OpenJDK runtime omits build resources and produces stable release launchers', () => {
+  const first = render('charts/component/openjdk', promotionValues('v1.2.3'));
+  const second = render('charts/component/openjdk', promotionValues('v1.2.3'));
+  const changed = render('charts/component/openjdk', promotionValues('v1.2.4'));
+  resource(first, 'ImageStream', 'checkout');
+  resource(first, 'Deployment', 'checkout');
   const firstJob = resource(first, 'Job');
   const secondJob = resource(second, 'Job');
   const changedJob = resource(changed, 'Job');
@@ -75,6 +94,6 @@ test('non-build runtime omits build resources and produces stable release launch
 });
 
 test('component promotion rejects mutable latest outside the build environment', () => {
-  assert.match(renderFailure('charts/component/runtime', promotionValues('latest')),
+  assert.match(renderFailure('charts/component/openjdk', promotionValues('latest')),
     /promotion requires an immutable human release/);
 });

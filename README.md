@@ -44,8 +44,8 @@ resulting contracts. They need neither a live cluster nor a `software-templates`
 To inspect one chart while working:
 
 ```bash
-helm lint charts/domain/system-discovery
-helm template tenant-domain charts/domain/system-discovery \
+helm lint charts/domain/environment
+helm template tenant-domain charts/domain/environment \
   -f /path/to/merged-target-and-domain-entities.yaml
 ```
 
@@ -61,13 +61,11 @@ flowchart TD
     domainGit[Tenant Domain repository] --> domain[Domain chart]
     domain -->|Creates active System Applications| system[System chart]
     systemGit[Tenant System repository] --> system
-    system --> api["API specification build<br/>build environment only"]
-    system --> componentEnvironment[Component environment]
-    system --> componentRuntime[Component runtime]
+    system --> api["OpenAPI publication<br/>build environment only"]
+    system --> component["OpenJDK Component<br/>ImageStream and optional workload"]
     system --> resource[Resource profile]
     api --> platform[OpenShift platform]
-    componentEnvironment --> platform
-    componentRuntime --> platform
+    component --> platform
     resource --> platform
 ```
 
@@ -89,17 +87,16 @@ lifecycle from forcing unrelated resources to appear or rerun.
 
 | Chart | Why it exists separately | Responsibility | Detailed guide |
 | --- | --- | --- | --- |
-| `charts/domain/system-discovery` | Keeps tenant-wide lifecycle policy above application concerns | Discover active Systems across all Domain environments | [`charts/domain/system-discovery/README.md`](charts/domain/system-discovery/README.md) |
+| `charts/domain/environment` | Keeps tenant-wide lifecycle policy above application concerns | Discover active Systems across all Domain environments | [`charts/domain/environment/README.md`](charts/domain/environment/README.md) |
 | `charts/system/environment` | Centralizes shared namespace, project, discovery, and promotion policy | Create the System scope and leaf ApplicationSets | [`charts/system/environment/README.md`](charts/system/environment/README.md) |
-| `charts/api/specification-build` | Gives contracts a publication lifecycle independent of workloads | Validate and publish OpenAPI contracts | [`charts/api/specification-build/README.md`](charts/api/specification-build/README.md) |
-| `charts/component/environment` | Allows registry infrastructure to exist before a release is selected | Create the environment-local ImageStream | [`charts/component/environment/README.md`](charts/component/environment/README.md) |
-| `charts/component/runtime` | Lets artifact selection drive runtime and promotion without owning registry provisioning | Reconcile runtime, build, webhook, and release-launcher resources | [`charts/component/runtime/README.md`](charts/component/runtime/README.md) |
+| `charts/api/openapi` | Gives OpenAPI contracts a publication lifecycle independent of workloads | Validate and publish OpenAPI contracts | [`charts/api/openapi/README.md`](charts/api/openapi/README.md) |
+| `charts/component/openjdk` | Keeps one OpenJDK Component environment in one reconciliation boundary | Create its ImageStream and conditionally reconcile build, runtime, and promotion resources | [`charts/component/openjdk/README.md`](charts/component/openjdk/README.md) |
 | `charts/resource/postgresql` | Encapsulates one trusted implementation behind the generic Resource contract | Create a Crunchy `PostgresCluster` | [`charts/resource/postgresql/README.md`](charts/resource/postgresql/README.md) |
 
-Charts are grouped by Backstage catalog entity kind. Component environment and runtime concerns are
-separate because registry provisioning and release selection are independent lifecycle signals.
-The canonical repository convention is `charts/<entity>/<responsibility>`; no compatibility chart
-copies are maintained at older paths.
+Charts are grouped first by Backstage catalog entity kind, then by the current implementation or
+lifecycle concern: `domain/environment`, `system/environment`, `api/openapi`,
+`component/openjdk`, and `resource/postgresql`. The structure leaves room for additional concrete
+profiles later without documenting or implementing hypothetical profiles now.
 
 ## Reconciliation contracts
 
@@ -107,8 +104,8 @@ copies are maintained at older paths.
 | --- | --- |
 | `systems/<system>/environments/<environment>.yaml` | Attach a System to a Domain environment |
 | `apis/<api>/values.yaml` | Create API publication resources in the build environment |
-| `components/<component>/environments/<environment>.yaml` | Create Component registry infrastructure |
-| `components/<component>/releases/<environment>.yaml` | Create the Component runtime and, outside build, its promotion launcher |
+| `components/<component>/environments/<environment>.yaml` | Create one Component Application and its ImageStream |
+| Optional `components/<component>/releases/<environment>.yaml` | Select an image tag and add workload or promotion resources to that Application |
 | `resources/*/*/environments/<environment>.yaml` | Provision a managed Resource |
 
 File absence also carries meaning: a System is inactive, a Component repository can exist before
@@ -164,11 +161,10 @@ Use [Operations and troubleshooting](docs/operations.md) for:
 
 | Path | Purpose |
 | --- | --- |
-| [`charts/domain/system-discovery/`](charts/domain/system-discovery/) | Domain discovery and controller project |
+| [`charts/domain/environment/`](charts/domain/environment/) | Domain discovery and controller project |
 | [`charts/system/environment/`](charts/system/environment/) | System discovery, namespace, project, build RBAC, and promotion engine |
-| [`charts/api/specification-build/`](charts/api/specification-build/) | OpenAPI validation and publication |
-| [`charts/component/environment/`](charts/component/environment/) | Environment-local ImageStream |
-| [`charts/component/runtime/`](charts/component/runtime/) | Component build, release, promotion launcher, and runtime |
+| [`charts/api/openapi/`](charts/api/openapi/) | OpenAPI validation and publication |
+| [`charts/component/openjdk/`](charts/component/openjdk/) | OpenJDK ImageStream, build, runtime, and promotion resources |
 | [`charts/resource/postgresql/`](charts/resource/postgresql/) | PostgreSQL Resource implementation |
 | [`test/`](test/) | Rendered contract tests and fixtures |
 

@@ -22,7 +22,7 @@ locate the trusted chart repository directly. `spec.platform.schemaRegistry`,
 `spec.platform.registry`, and `spec.platform.build` pass target-owned runtime policy downstream.
 
 ```bash
-helm lint charts/domain/system-discovery
-helm template tenant-domain charts/domain/system-discovery \
+helm lint charts/domain/environment
+helm template tenant-domain charts/domain/environment \
   -f /path/to/merged-domain-and-target-values.yaml
 ```

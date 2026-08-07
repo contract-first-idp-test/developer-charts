@@ -91,8 +91,9 @@ spec:
           runtimePullSecretName: default-quay-openshift
 ```
 
-The `charts/component/environment` chart creates an ImageStream for each active Component environment.
-Quay Bridge responds by provisioning the environment-local repository and robot credentials.
+The `charts/component/openjdk` chart creates an ImageStream as soon as a Component environment is
+active. Quay Bridge responds by provisioning the environment-local repository and robot
+credentials; workload resources remain absent until `image.tag` selects an image.
 
 Confirm that:
 

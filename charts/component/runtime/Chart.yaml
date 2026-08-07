@@ -1,5 +1,0 @@
-apiVersion: v2
-name: component-runtime
-description: Runtime, optional build, and release launcher state for one Component environment.
-type: application
-version: 1.0.0

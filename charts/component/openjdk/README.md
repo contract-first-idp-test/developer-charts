@@ -1,17 +1,22 @@
-# Component runtime chart
+# OpenJDK Component chart
 
-Reconciles one released Component runtime and, when enabled, its build and release automation.
+Reconciles one OpenJDK Component environment in a single Argo CD Application.
 
-The separate [`charts/component/environment`](../environment/README.md) chart owns the ImageStream for
-every active environment, so registry provisioning does not depend on release presence.
+The chart always creates the environment-local ImageStream. An optional release value file supplies
+`image.tag`; until a tag is selected, Deployment, Service, Route, and promotion resources remain
+absent. There is no separate Component infrastructure Application.
 
 ## Rendered capabilities
 
 | Condition | Resources |
 | --- | --- |
-| Every selected release | Deployment, Service, optional Route, and runtime configuration |
-| `build.enabled: true` and `environment == build.environment` | Build ServiceAccount, Pipeline, Triggers, webhook Route, and initial-build hook |
-| Non-build environment | Deterministic release-specific promotion launcher Job |
+| Every active Component environment | ImageStream |
+| `image.tag` is set | Deployment, Service, optional Route, and runtime configuration |
+| `build.enabled: true` and `environment == build.environment` | Pipeline, Triggers, webhook Route, and initial-build hook |
+| Non-build environment with a human `image.tag` | Deterministic release-specific promotion launcher Job |
+
+The build-environment release may select `latest`. Promoted environments require an immutable
+human tag such as `v1.2.3`.
 
 ## Build and human release paths
 
@@ -85,6 +90,6 @@ chart.
 ## Validate
 
 ```bash
-helm lint charts/component/runtime
-helm template example-component charts/component/runtime -f /path/to/runtime-values.yaml
+helm lint charts/component/openjdk
+helm template example-component charts/component/openjdk -f /path/to/component-values.yaml
 ```

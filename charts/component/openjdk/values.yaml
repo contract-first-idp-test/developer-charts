@@ -6,7 +6,7 @@ implementationProfile: quarkus-camel-openapi
 replicas: 1
 image:
   repository: quay.example.invalid/example_example-dev/service
-  tag: latest
+  tag: ""
   pullPolicy: Always
 runtime:
   health:

@@ -11,11 +11,11 @@ Before retrying anything, identify the controller that owns the failed object:
 | Parent Domain Application | Platform tenant admission |
 | Domain and System AppProjects | Parent Domain or build-environment System Application |
 | ApplicationSets and leaf Applications | Domain or System chart |
-| Initial API publication Job | API specification-build chart |
-| Initial Component build Job | Component runtime chart |
-| Promotion launcher Job | Component runtime chart |
+| Initial API publication Job | OpenAPI chart |
+| Initial Component build Job | OpenJDK Component chart |
+| Promotion launcher Job | OpenJDK Component chart |
 | Promotion Pipeline and RBAC | System chart |
-| Deployment, Service, and Route | Component runtime chart |
+| ImageStream, Deployment, Service, and Route | OpenJDK Component chart |
 
 Prefer changing Git or retrying a documented Job/Pipeline over editing a rendered object in place.
 

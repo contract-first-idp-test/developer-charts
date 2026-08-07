@@ -17,9 +17,8 @@ test('system lints and renders the namespace and chart discovery contracts', () 
   resource(resources, 'AppProject', 'tenant-retail-orders');
 
   const expected = [
-    ['-api-builds', 'apis/*/values.yaml', 'charts/api/specification-build'],
-    ['-components', 'components/*/releases/sandbox.yaml', 'charts/component/runtime'],
-    ['-component-environments', 'components/*/environments/sandbox.yaml', 'charts/component/environment'],
+    ['-api-builds', 'apis/*/values.yaml', 'charts/api/openapi'],
+    ['-components', 'components/*/environments/sandbox.yaml', 'charts/component/openjdk'],
     ['-resources', 'resources/*/*/environments/sandbox.yaml', '{{ .implementation.path }}'],
   ];
   for (const [suffix, discoveryPath, chartPath] of expected) {
@@ -37,6 +36,7 @@ test('system lints and renders the namespace and chart discovery contracts', () 
     '$values/components/{{ index .path.segments 1 }}/environments/sandbox.yaml',
     '$values/components/{{ index .path.segments 1 }}/releases/sandbox.yaml',
   ]);
+  assert.equal(component.spec.template.spec.sources[0].helm.ignoreMissingValueFiles, true);
   const api = appSet(resources, '-api-builds');
   assert.deepEqual(api.spec.template.spec.sources[0].helm.valueFiles,
     ['$values/apis/{{ index .path.segments 1 }}/values.yaml']);
@@ -63,14 +63,6 @@ test('system lints and renders the namespace and chart discovery contracts', () 
     targetRevision: 'trunk',
     ref: 'values',
   });
-
-  const componentEnvironment = appSet(resources, '-component-environments');
-  assert.deepEqual(componentEnvironment.spec.template.spec.source.helm.valuesObject, {
-    systemName: 'orders',
-    componentName: '{{ index .path.segments 1 }}',
-    environment: 'sandbox',
-  });
-  assert.equal(componentEnvironment.spec.template.spec.destination.namespace, 'orders-build');
 
   const componentValues = component.spec.template.spec.sources[0].helm.valuesObject;
   assert.deepEqual({

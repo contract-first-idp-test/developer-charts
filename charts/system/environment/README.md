@@ -7,13 +7,13 @@ Resources; the build environment also discovers APIs.
 
 | Pattern | Scope | Result |
 | --- | --- | --- |
-| `apis/*/values.yaml` | Build environment only | API specification-build Applications |
-| `components/*/environments/<environment>.yaml` | Selected environment | Component environment Applications |
-| `components/*/releases/<environment>.yaml` | Selected environment | Component runtime Applications |
+| `apis/*/values.yaml` | Build environment only | OpenAPI publication Applications |
+| `components/*/environments/<environment>.yaml` | Selected environment | OpenJDK Component Applications |
 | `resources/*/*/environments/<environment>.yaml` | Selected environment | Resource implementation Applications |
 
-Component infrastructure and runtime are deliberately independent. A target Quay repository can
-exist before a release is selected, and a Component source repository can exist before either.
+Each active Component environment has one Application. It loads base and environment values plus
+an optional `components/<component>/releases/<environment>.yaml` file. The OpenJDK chart creates the
+ImageStream immediately and waits for `image.tag` before creating workload resources.
 
 ## Responsibilities
 
@@ -21,7 +21,7 @@ The chart creates:
 
 - the environment-specific System namespace;
 - the System AppProject from the build environment only;
-- Component environment, Component runtime, and Resource ApplicationSets in every environment;
+- one Component and one Resource ApplicationSet in every environment;
 - the API ApplicationSet in the build environment;
 - build RBAC in the Domain's build environment;
 - adjacent image-promotion RBAC and Pipeline resources in later environments.

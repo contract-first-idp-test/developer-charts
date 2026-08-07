@@ -19,7 +19,7 @@ spec:
         repoURL: {{ .Values.systemRepository.url }}
         revision: {{ .Values.systemRepository.revision }}
         files:
-          - path: components/*/releases/{{ .Values.environment.name }}.yaml
+          - path: components/*/environments/{{ .Values.environment.name }}.yaml
   template:
     metadata:
       name: '{{ .Values.systemName }}-{{ "{{ index .path.segments 1 }}" }}-{{ .Values.environment.name }}'
@@ -33,8 +33,9 @@ spec:
       sources:
         - repoURL: {{ .Values.delivery.charts.repository }}
           targetRevision: {{ .Values.delivery.charts.revision }}
-          path: charts/component/runtime
+          path: charts/component/openjdk
           helm:
+            ignoreMissingValueFiles: true
             valueFiles:
               - '$values/components/{{ "{{ index .path.segments 1 }}" }}/values.yaml'
               - '$values/components/{{ "{{ index .path.segments 1 }}" }}/environments/{{ .Values.environment.name }}.yaml'

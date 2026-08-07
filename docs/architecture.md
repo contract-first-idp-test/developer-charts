@@ -26,7 +26,7 @@ System repository.
 | Reconcile from Git without writing back | Tenant Git is the declared state, so charts and controllers only read it and report status through Argo CD, Tekton, and workload conditions. Avoiding controller-generated commits prevents feedback loops and preserves a clear distinction between requested state and observed state. |
 | Discover intent with layered ApplicationSets | Domain, System, and leaf layers mirror the catalog concepts and ownership model already presented in Backstage. Small discovery files let Argo CD create only the Applications implied by tenant intent, without a central process regenerating a large manifest. Their paths and presence are consequently treated as a stable, tested interface. |
 | Keep trusted implementation coordinates in platform values | Tenants can select supported profiles and configure exposed behavior, but the platform supplies the chart repository and revision. This prevents tenant state from redirecting Argo CD to arbitrary implementation code. Adding a new Resource implementation is therefore an intentional platform change with its own chart, schema, and compatibility tests. |
-| Separate Component environment infrastructure from runtime | A target Quay repository and its namespace-local credentials must exist before a release can be copied or a Deployment can pull it. Discovering environment and release files independently allows that prerequisite to converge early and lets a Component exist without pretending that it has already been released. |
+| Use one Application per Component environment | The environment declaration creates the OpenJDK Application and its ImageStream immediately. Its optional release file adds `image.tag`; workload and promotion resources render only after that selection, so registry provisioning still converges before a release without requiring a second Application. |
 | Build once and materialize releases from the built digest | The build environment produces `git-<sha>`, and a human Git tag resolves that commit before copying the existing image to a release tag. This avoids a release-time rebuild and preserves the link to the built commit. The current Maven step uses `-DskipTests`, and release materialization does not guard an existing human image tag; test execution and tag immutability therefore require separate policy. |
 | Use environment-local repositories and adjacent promotion | Each runtime pulls from its own environment's Quay repository, keeping credentials local and making image transport an explicit event. The next environment receives narrowly scoped access to the immediately preceding source credential, which limits credential reach and makes the promotion path traceable. Direct skipping and reverse copying are intentionally excluded; rollback selects an older release and follows the same forward path. |
 | Assign each shared AppProject one owner | One parent Domain Application owns the Domain project. System projects remain owned by their build-environment controller. |
@@ -44,32 +44,31 @@ flowchart TD
     systemApps --> system[System chart]
     systemGit[System desired-state files] --> system
     system --> apiApps["API Applications<br/>build environment only"]
-    system --> componentInfraApps[Component environment Applications]
-    system --> componentRuntimeApps[Component runtime Applications]
+    system --> componentApps[OpenJDK Component Applications]
     system --> resourceApps[Resource Applications]
     apiApps --> cluster[OpenShift APIs]
-    componentInfraApps --> cluster
-    componentRuntimeApps --> cluster
+    componentApps --> cluster
     resourceApps --> cluster
 ```
 
 The Domain chart is evaluated once per Domain and emits one System-discovery ApplicationSet per
-ordered environment. Every System environment discovers Component
-infrastructure, Component releases, and Resources independently. API publication is discovered
-only by the build-environment System Application.
+ordered environment. Every System environment discovers Component environments and Resources.
+Each Component Application optionally consumes its matching release file. API publication is
+discovered only by the build-environment System Application.
 
 ## Discovery signals
 
 | Level | Discovery pattern | Scope | Result |
 | --- | --- | --- | --- |
 | Domain | `systems/*/environments/<environment>.yaml` | Selected environment | One active System Application |
-| System | `apis/*/values.yaml` | Build environment only | One API specification-build Application |
-| System | `components/*/environments/<environment>.yaml` | Selected environment | One Component environment Application |
-| System | `components/*/releases/<environment>.yaml` | Selected environment | One Component runtime Application |
+| System | `apis/*/values.yaml` | Build environment only | One OpenAPI publication Application |
+| System | `components/*/environments/<environment>.yaml` | Selected environment | One OpenJDK Component Application |
+| Values | Optional `components/*/releases/<environment>.yaml` | Selected environment | Image selection merged into that Component Application |
 | System | `resources/*/*/environments/<environment>.yaml` | Selected environment | One Resource implementation Application |
 
-The separation matters: creating a Component environment can provision its Quay repository before
-any release exists, and selecting a release does not mutate team-owned environment configuration.
+The environment file is the discovery signal. The OpenJDK chart creates its ImageStream without a
+release; selecting a release adds workload and, outside the build environment, promotion resources
+without changing the Application boundary.
 
 ## Values flow and ownership
 
@@ -140,7 +139,7 @@ older release tag and promotes it through the same adjacent path.
 | --- | --- | --- |
 | `tenant-<domain>-admission` | One parent Domain Application | Platform admission directory |
 | `tenant-<domain>` | System controller Applications | Parent Domain Application |
-| `tenant-<domain>-<system>` | API, Component, infrastructure, and Resource leaf Applications | System build-environment Application |
+| `tenant-<domain>-<system>` | API, Component, and Resource leaf Applications | System build-environment Application |
 
 The parent Domain Application creates its derived AppProject at sync wave 0. Discovery
 ApplicationSets render at wave 1. System projects retain their existing build-environment ownership.
