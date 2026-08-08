@@ -1,7 +1,7 @@
 domainName: example
 systemName: example
 groupId: io.github.cfidp.example
-owner: group:default/platform-engineering
+owner: group:default/domain-maintainers
 systemRepository:
   url: https://example.invalid/example-system.git
   revision: main

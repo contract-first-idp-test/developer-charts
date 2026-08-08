@@ -21,6 +21,9 @@ Tenant annotations locate the Domain repository. `spec.platform.charts.repositor
 locate the trusted chart repository directly. `spec.platform.schemaRegistry`,
 `spec.platform.registry`, and `spec.platform.build` pass target-owned runtime policy downstream.
 
+Generated System values use `group:default/domain-maintainers` for tenant ownership. The chart does
+not derive per-Domain Backstage group names.
+
 ```bash
 helm lint charts/domain/environment
 helm template tenant-domain charts/domain/environment \

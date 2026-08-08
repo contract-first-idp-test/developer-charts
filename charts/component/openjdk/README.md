@@ -60,6 +60,10 @@ the Component, target environment, and human release version. The launcher:
 3. confirms submission succeeded;
 4. exits without following the promotion logs.
 
+Before starting the PipelineRun, an init container checks the exact target Tekton `Pipeline` with
+the existing `get` permission. It retries for five minutes to tolerate Argo/ApplicationSet
+propagation and surfaces the final API error on timeout. It does not list PipelineRuns.
+
 Deployment and promotion converge independently, so temporary `ImagePullBackOff` is expected while
 the image is copied.
 

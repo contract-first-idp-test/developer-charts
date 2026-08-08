@@ -59,7 +59,7 @@ spec:
               domainName: {{ $.Values.metadata.name | quote }}
               systemName: '{{ "{{ .systemName }}" }}'
               groupId: '{{ "{{ .groupId }}" }}'
-              owner: group:default/{{ $.Values.metadata.name }}-maintainers
+              owner: group:default/domain-maintainers
               systemRepository:
                 url: '{{ "{{ .repository.cloneUrl }}" }}'
                 revision: '{{ "{{ .repository.revision }}" }}'

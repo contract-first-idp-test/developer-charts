@@ -1,7 +1,7 @@
 domainName: retail
 systemName: orders
 groupId: com.example.retail.orders
-owner: group:default/retail-maintainers
+owner: group:default/domain-maintainers
 systemRepository:
   url: https://tenant-gitea.example/retail-team/orders-system.git
   revision: trunk

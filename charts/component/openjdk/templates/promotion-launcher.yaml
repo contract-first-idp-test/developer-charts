@@ -30,6 +30,29 @@ spec:
     spec:
       serviceAccountName: {{ .Values.promotion.serviceAccountName }}
       restartPolicy: Never
+      initContainers:
+        - name: wait-for-promotion-pipeline
+          image: quay.io/openshift/origin-cli:4.16
+          env:
+            - {name: TARGET_NAMESPACE, value: {{ .Values.namespace | quote }}}
+            - {name: PIPELINE_NAME, value: {{ .Values.promotion.pipelineName | quote }}}
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -u
+              attempt=1
+              max_attempts=31
+              retry_seconds=10
+              while ! oc get pipeline.tekton.dev "$PIPELINE_NAME" \
+                -n "$TARGET_NAMESPACE" >/dev/null 2>&1; do
+                if [ "$attempt" -ge "$max_attempts" ]; then
+                  echo "Timed out waiting for the target promotion Pipeline after 300 seconds." >&2
+                  oc get pipeline.tekton.dev "$PIPELINE_NAME" -n "$TARGET_NAMESPACE"
+                  exit 1
+                fi
+                sleep "$retry_seconds"
+                attempt=$((attempt + 1))
+              done
       containers:
         - name: start-promotion
           image: registry.redhat.io/openshift-pipelines/pipelines-cli-tkn-rhel8:v1.15.4
@@ -42,20 +65,6 @@ spec:
           args:
             - |
               set -eu
-              attempt=1
-              while [ "$attempt" -le 6 ]; do
-                if tkn pipeline describe "$PIPELINE_NAME" \
-                  -n "$TARGET_NAMESPACE" >/dev/null 2>&1; then
-                  break
-                fi
-                sleep $((attempt * 2))
-                attempt=$((attempt + 1))
-              done
-              if [ "$attempt" -gt 6 ]; then
-                echo "Target promotion Pipeline was not ready after bounded retry." >&2
-                exit 1
-              fi
-
               tkn pipeline start "$PIPELINE_NAME" \
                 -n "$TARGET_NAMESPACE" \
                 --serviceaccount pipeline \

@@ -91,6 +91,16 @@ test('promoted OpenJDK runtime omits build resources and produces stable release
   assert.equal(firstJob.metadata.annotations['contract-first-idp.github.io/release-tag'], 'v1.2.3');
   assert.doesNotMatch(YAML.stringify(firstJob), /maven|buildah/i);
   assert.equal(first.some(item => item.kind === 'Secret'), false);
+
+  const wait = firstJob.spec.template.spec.initContainers.find(container =>
+    container.name === 'wait-for-promotion-pipeline');
+  const waitScript = wait.args.join('\n');
+  assert.match(waitScript, /oc get pipeline\.tekton\.dev "\$PIPELINE_NAME"/);
+  assert.match(waitScript, /max_attempts=31/);
+  assert.match(waitScript, /retry_seconds=10/);
+  assert.match(waitScript, /300 seconds/);
+  assert.doesNotMatch(YAML.stringify(firstJob), /tkn pipeline describe/);
+  assert.match(firstJob.spec.template.spec.containers[0].args.join('\n'), /tkn pipeline start/);
 });
 
 test('component promotion rejects mutable latest outside the build environment', () => {

@@ -80,6 +80,11 @@ oc delete job <launcher-job> -n <target-namespace>
 
 Use this only after fixing the root cause, such as missing Pipeline readiness or local RBAC.
 
+The launcher waits up to five minutes for the exact target `Pipeline` before invoking
+`tkn pipeline start`. The readiness check uses only `get` on Pipelines; it does not require listing
+PipelineRuns. On timeout, inspect the final `oc get pipeline.tekton.dev` error emitted by the init
+container before retrying the Argo sync.
+
 ## Promotion Pipeline failures
 
 The launcher exits after successfully creating a PipelineRun; it does not follow promotion logs.

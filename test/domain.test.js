@@ -77,6 +77,7 @@ test('Domain uses tenant identity and trusted platform inputs', () => {
   assert.equal(valuesObject.environment.name, 'stage');
   assert.equal(valuesObject.environment.namespaceSuffix, '-preprod');
   assert.equal(valuesObject.environment.clusterDomain, 'apps.west.example');
+  assert.equal(valuesObject.owner, 'group:default/domain-maintainers');
   assert.equal(valuesObject.schemaRegistry.apiUrl,
     'https://registry.example/apis/registry/v3');
   assert.deepEqual(valuesObject.spectralRules, {

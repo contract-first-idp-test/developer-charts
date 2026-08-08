@@ -116,4 +116,9 @@ test('system limits build and promotion access to the environments that need it'
   assert.equal(params['source-namespace'], 'orders-build');
   assert.equal(params['source-secret-name'], 'source-registry-auth');
   assert.equal(stageResources.some(item => item.kind === 'Secret'), false);
+  const launcherRole = resource(stageResources, 'Role', 'image-promoter-launcher');
+  assert.deepEqual(launcherRole.rules, [
+    {apiGroups: ['tekton.dev'], resources: ['pipelines'], verbs: ['get']},
+    {apiGroups: ['tekton.dev'], resources: ['pipelineruns'], verbs: ['create']},
+  ]);
 });

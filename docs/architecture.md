@@ -96,6 +96,9 @@ The Domain chart normalizes the platform chart clone URL once and passes it thro
 declarations can select a supported implementation path but cannot replace the platform repository
 or revision.
 
+Tenant catalog ownership is normalized to `group:default/domain-maintainers`. The Domain chart
+passes that fixed owner into every System environment rather than deriving a per-Domain group.
+
 The Domain chart synthesizes `environment.clusterDomain` for the existing System contract from the
 target-owned router domain. `build.sccClusterRoleName` is carried through but not consumed by a leaf
 template. Routes use OpenShift-assigned hosts, and SCC
