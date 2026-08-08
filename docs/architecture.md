@@ -27,8 +27,8 @@ System repository.
 | Discover intent with layered ApplicationSets | Domain, System, and leaf layers mirror the catalog concepts and ownership model already presented in Backstage. Small discovery files let Argo CD create only the Applications implied by tenant intent, without a central process regenerating a large manifest. Their paths and presence are consequently treated as a stable, tested interface. |
 | Keep trusted implementation coordinates in platform values | Tenants can select supported profiles and configure exposed behavior, but the platform supplies the chart repository and revision. This prevents tenant state from redirecting Argo CD to arbitrary implementation code. Adding a new Resource implementation is therefore an intentional platform change with its own chart, schema, and compatibility tests. |
 | Use one Application per Component environment | The environment declaration creates the OpenJDK Application and its ImageStream immediately. Its optional release file adds `image.tag`; workload and promotion resources render only after that selection, so registry provisioning still converges before a release without requiring a second Application. |
-| Build once and materialize releases from the built digest | The build environment produces `git-<sha>`, and a human Git tag resolves that commit before copying the existing image to a release tag. This avoids a release-time rebuild and preserves the link to the built commit. The current Maven step uses `-DskipTests`, and release materialization does not guard an existing human image tag; test execution and tag immutability therefore require separate policy. |
-| Use environment-local repositories and adjacent promotion | Each runtime pulls from its own environment's Quay repository, keeping credentials local and making image transport an explicit event. The next environment receives narrowly scoped access to the immediately preceding source credential, which limits credential reach and makes the promotion path traceable. Direct skipping and reverse copying are intentionally excluded; rollback selects an older release and follows the same forward path. |
+| Build once and materialize releases from the built digest | The build environment produces `git-<sha>`, and a human Git tag resolves that commit before copying the existing image to a release tag. A small digest guard refuses to reassign an existing human version to a different artifact. This avoids a release-time rebuild and preserves the link to the built commit. The current Maven step still uses `-DskipTests`, so test execution remains a separate policy. |
+| Use environment-local repositories and adjacent promotion | Each runtime pulls from its own environment's Quay repository, keeping credentials local and making image transport an explicit event. External Secrets places the immediately preceding repository's narrowly scoped pull credential in the target namespace; the target PipelineRun combines it with the target push credential. Direct skipping and reverse copying are intentionally excluded; rollback selects an older release and follows the same forward path. |
 | Assign each shared AppProject one owner | One parent Domain Application owns the Domain project. System projects remain owned by their build-environment controller. |
 | Use retained Sync hooks for initial publication and build | The first API publication and Component build must affect Argo CD readiness, so hook Jobs start the PipelineRun, follow its result, and fail the sync when necessary. Successful named Jobs are retained to prevent an ordinary resync from repeating unchanged work; failed hooks are removed so a later sync can retry after correction. |
 
@@ -191,12 +191,15 @@ flowchart TD
     tag[Human Git tag] --> resolve[Resolve peeled commit SHA]
     resolve --> locate[Locate existing commit image]
     commitImage --> locate
-    locate --> alias[Copy image to human release tag]
+    locate --> guard[Assert human tag is absent or matches]
+    guard --> alias[Curated skopeo-copy Task]
 ```
 
 The release branch never packages source, rebuilds an image, updates `latest`, or restarts the
-runtime. It performs a single copy attempt and can replace an existing human image tag. Configure
-Quay tag immutability or enforce an equivalent release policy before treating the tag as immutable.
+runtime. The shared `assert-image-tag-compatible` Task inspects source and destination digests. An
+absent destination or an existing matching digest is safe; an existing different digest fails
+before the copy. The copy itself is performed by the cluster-resolved
+`openshift-pipelines/skopeo-copy` Task. CF-IDP does not automate Quay immutable-tag policy.
 
 The initial build is an Argo CD Sync hook Job. It follows the PipelineRun with `tkn` and fails the
 sync if the build fails. A successful Job is retained so ordinary syncs do not rebuild unchanged
@@ -215,13 +218,24 @@ flowchart TD
     git --> argocd[Argo CD reconciles the target runtime and launcher Job]
     argocd --> launcher[Launcher starts the target promote-image PipelineRun and exits]
     launcher --> source[Pipeline resolves the digest from the source Quay repository]
-    source --> copy[Copy all manifests by digest to the target Quay repository]
-    copy --> verify[Verify the destination digest]
+    source --> guard[Reject a conflicting destination version]
+    guard --> copy[Curated skopeo-copy Task copies by digest]
+    copy --> result[Return source and destination digests]
 ```
 
-The next environment's promoter can read only the named Quay credential in the preceding namespace.
-It writes authentication to ephemeral storage, never copies the Kubernetes Secret, refuses a
-conflicting target tag, and treats an already-matching digest as success.
+Each activated target environment uses External Secrets to materialize the immediately preceding
+environment's named, narrowly scoped Quay pull credential in its own namespace. The target owns the
+reader, SecretStore, ExternalSecret, and minimal named-Secret RBAC bridge back to the source; the
+first environment creates no incoming credential resources. The target `pipeline` ServiceAccount
+references the local source credential and target-local push credential, with no permission to read
+source Secrets directly. The generated source credential scopes its Docker auth entry to the source
+Quay organization path, so it can coexist with the target push robot on the same registry host.
+Tekton merges both credentials into its standard registry configuration.
+
+CF-IDP implements only the pre-copy release invariant. Normal publish, human release
+materialization, and environment promotion all resolve the curated
+`openshift-pipelines/skopeo-copy` Task for the copy primitive. Skopeo remains in the compact guard
+only to inspect digests.
 
 The Deployment and PipelineRun converge independently. Temporary `ImagePullBackOff` is expected
 until the target-local image exists.

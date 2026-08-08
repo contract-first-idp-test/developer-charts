@@ -64,9 +64,10 @@ If it fails:
 - inspect access to the build repository's push credential;
 - check whether the human tag already exists and which digest it references.
 
-The current materialization task does not wait for a missing commit image and does not protect an
-existing human tag from replacement. Retry only after confirming the commit image exists and the
-release tag has not been moved. Enforce human-tag immutability in Quay or through release policy.
+The materialization path does not wait for a missing commit image. Before copying, its shared digest
+guard permits an absent release tag or an existing tag at the same digest and rejects an existing
+tag at a different digest. Retry only after confirming the commit image exists; do not move the Git
+tag or attempt to reassign the human image version.
 
 ## Promotion launcher failures
 
@@ -95,8 +96,10 @@ This retry is idempotent:
 
 - an existing matching destination digest succeeds;
 - a different destination digest fails;
-- the source Secret remains in the preceding namespace;
-- authentication is removed from ephemeral storage after the Task.
+- External Secrets keeps a narrowly scoped copy of the source pull credential in the target
+  namespace;
+- the target `pipeline` ServiceAccount supplies that pull credential and the target push credential
+  through standard Tekton registry authentication.
 
 ## Temporary ImagePullBackOff
 

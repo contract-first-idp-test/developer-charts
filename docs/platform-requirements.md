@@ -37,12 +37,17 @@ The charts use `tekton.dev/v1` Pipelines and PipelineRuns plus Tekton Triggers
 `triggers.tekton.dev/v1beta1` resources with CEL interceptors. `git-clone`, `buildah`, and
 `skopeo-copy` are expected in `openshift-pipelines`. The platform-curated `maven` Task in
 `tekton-tasks` must support Java 21, the `GOALS` and `JAVA_VERSION` parameters, and the `source` and
-`maven_settings` workspaces.
+`maven_settings` workspaces. The installed `skopeo-copy` Task must expose the uppercase
+`SOURCE_IMAGE_URL`, `DESTINATION_IMAGE_URL`, `SRC_TLS_VERIFY`, `DEST_TLS_VERIFY`, and `VERBOSE`
+parameters, the optional `images_url` workspace, and the `SOURCE_DIGEST` and
+`DESTINATION_DIGEST` results. CF-IDP's single-image copies supply the source and destination URLs
+plus both TLS verification parameters.
 
-Launcher Jobs use the Red Hat `tkn` CLI image. The charts create the build-environment `pipeline`
-ServiceAccount, but non-build promotion also assumes a `pipeline` ServiceAccount exists in every
-target namespace. Confirm the OpenShift Pipelines installation provisions it or manage it through
-platform bootstrap.
+Launcher Jobs use the Red Hat `tkn` CLI image. The charts create each build or promotion
+`pipeline` ServiceAccount with its required namespace-local registry Secret references. The
+OpenShift Pipelines credential initializer must be enabled so `kubernetes.io/dockerconfigjson`
+Secrets associated with that ServiceAccount are merged into `$HOME/.docker/config.json` for the
+guard and curated copy Task.
 
 The configured build ServiceAccount must be allowed to run Pipelines under the platform's selected
 pipelines SCC. The current `build.sccClusterRoleName` value is reserved and does not create that
@@ -54,8 +59,8 @@ The rendered resources also pin operational tool images:
 | --- | --- |
 | Follow or launch PipelineRuns | `registry.redhat.io/openshift-pipelines/pipelines-cli-tkn-rhel8:v1.15.4` |
 | Validate API documents | `stoplight/spectral:6.15.0` through `spectral-quality-gate` |
-| Query OpenShift and restart Deployments | `quay.io/openshift/origin-cli:4.16` |
-| Inspect and copy image manifests | `quay.io/skopeo/stable:v1.17.0` |
+| Query OpenShift and restart Deployments | `registry.redhat.io/openshift4/ose-cli` |
+| Inspect image digests for the release-version guard | `quay.io/skopeo/stable:v1.17.0` |
 
 Mirror or approve these images according to platform supply-chain policy and test upgrades before
 changing their pins.
@@ -95,15 +100,23 @@ The `charts/component/openjdk` chart creates an ImageStream as soon as a Compone
 active. Quay Bridge responds by provisioning the environment-local repository and robot
 credentials; workload resources remain absent until `image.tag` selects an image.
 
+Promotion credential distribution also requires External Secrets Operator with the Kubernetes
+provider. Each activated target environment creates a dedicated reader identity, grants it `get`
+on only the configured pull Secret in the immediately preceding namespace, and materializes a
+Docker-config Secret in its own namespace. Its auth entry is narrowed to the source Quay
+organization path so Tekton can merge it with the target robot credential on the same registry
+host. The target `pipeline` ServiceAccount does not read Secrets across namespaces.
+
 Confirm that:
 
 - the observed Secret names match the configured values;
 - the build ServiceAccount can push to the build repository;
 - runtime pods can pull from the current environment repository;
-- the target promoter can read only the named source credential in the immediately preceding
-  namespace;
-- a `pipeline` ServiceAccount exists in every target namespace and can run the promotion
-  PipelineRun;
+- the External Secrets reader can read only the named source credential in the immediately
+  preceding namespace;
+- the generated target-local source pull Secret and target push Secret are both referenced by the
+  target `pipeline` ServiceAccount;
+- the `pipeline` ServiceAccount can run the promotion PipelineRun and the curated Task can resolve;
 - robot tokens have the expected Quay ACLs.
 
 Kubernetes RBAC can restrict access to a Secret object but cannot narrow permissions embedded in
@@ -139,10 +152,12 @@ shared-secret design is added.
 - Tekton's cluster resolver is enabled.
 - All four required Tasks resolve in their expected namespaces.
 - Tekton v1 Pipelines and v1beta1 Triggers with CEL interceptors are available.
-- Build and target `pipeline` ServiceAccounts exist and can use the required SCC.
+- Build and target `pipeline` ServiceAccounts exist, contain the expected registry Secret
+  references, and can use the required SCC.
 - Schema Registry is reachable at the target-owned URL and accepts the configured unauthenticated Maven
   requests.
 - Required operational images are approved or mirrored.
 - Quay Bridge creates the configured credential Secrets.
+- External Secrets reports the promotion `SecretStore` and generated source credential Ready.
 - Quay robot ACLs match the intended source, destination, and runtime access.
 - Required Resource operators and CRDs are healthy.

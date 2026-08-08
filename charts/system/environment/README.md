@@ -52,20 +52,24 @@ Non-build environments use the project without recreating it.
 ```mermaid
 flowchart TD
     accTitle: Promotion credential flow
-    accDescr: The target image-promoter service account creates a PipelineRun. The target pipeline service account receives narrowly scoped access to the preceding namespace credential and runs the copy into the target repository.
+    accDescr: The target image-promoter service account creates a PipelineRun. External Secrets distributes a narrow source pull credential into the target namespace, where the pipeline service account uses it with the target push credential.
     promoter["Target image-promoter<br/>ServiceAccount"] -->|Create PipelineRun| run[Target promote-image PipelineRun]
-    source["Preceding namespace<br/>named source credential"]
+    source["Preceding namespace<br/>named source credential"] -->|Dedicated ESO reader| local["Target-local<br/>source pull credential"]
     pipelineSa["Target pipeline<br/>ServiceAccount"]
-    source -->|Secret get through RBAC| pipelineSa
+    local --> pipelineSa
+    push["Target-local<br/>push credential"] --> pipelineSa
     pipelineSa -->|Run copy Task| run
-    run -->|Copy and verify digest| target[Target-local Quay repository]
+    run -->|Guard, then curated skopeo-copy| target[Target-local Quay repository]
 ```
 
 The first ordered environment has build RBAC and no incoming promotion Pipeline. Each later
-environment receives a promoter, Pipeline, and Skopeo Task fixed to the immediately preceding
-environment. The `image-promoter` ServiceAccount can submit the target-local PipelineRun but cannot
-read the source Secret. The target namespace's `pipeline` ServiceAccount receives that narrowly
-scoped read. RBAC grants no reverse, non-adjacent, or cross-namespace PipelineRun access.
+environment owns its incoming reader, SecretStore, ExternalSecret, promoter, and Pipeline fixed to
+the immediately preceding environment. It creates only a named-Secret Role and binding in that
+already-active source namespace. A shared compact Task guards human-version digest compatibility,
+while all copies resolve the curated `openshift-pipelines/skopeo-copy` Task. The `image-promoter`
+ServiceAccount can submit the target-local PipelineRun but cannot read registry Secrets. The target
+`pipeline` ServiceAccount references only local Secrets and has no cross-namespace Secret access.
+RBAC grants no reverse, non-adjacent, or cross-namespace PipelineRun access.
 
 ## Validate
 

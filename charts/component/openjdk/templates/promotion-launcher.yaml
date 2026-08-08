@@ -32,7 +32,7 @@ spec:
       restartPolicy: Never
       initContainers:
         - name: wait-for-promotion-pipeline
-          image: quay.io/openshift/origin-cli:4.16
+          image: registry.redhat.io/openshift4/ose-cli
           env:
             - {name: TARGET_NAMESPACE, value: {{ .Values.namespace | quote }}}
             - {name: PIPELINE_NAME, value: {{ .Values.promotion.pipelineName | quote }}}

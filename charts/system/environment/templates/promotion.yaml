@@ -9,18 +9,31 @@
 {{- $sourceName := index $order (sub $currentIndex 1) }}
 {{- $source := index .Values.environments.definitions $sourceName }}
 {{- if not $source }}{{ fail (printf "ordered environment %q has no definition" $sourceName) }}{{- end }}
+{{- $sourceNamespace := printf "%s%s" .Values.systemName $source.namespaceSuffix }}
+{{- $targetNamespace := printf "%s%s" .Values.systemName .Values.environment.namespaceSuffix }}
+{{- $sourceCredentialName := printf "image-promoter-source-%s" $sourceName | trunc 63 | trimSuffix "-" }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: image-promoter
-  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  namespace: {{ $targetNamespace }}
   annotations: {argocd.argoproj.io/sync-wave: "0"}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pipeline
+  namespace: {{ $targetNamespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+secrets:
+  - {name: {{ $sourceCredentialName }}}
+  - {name: {{ .Values.registry.credentials.destinationPushSecretName }}}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: image-promoter-launcher
-  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  namespace: {{ $targetNamespace }}
   annotations: {argocd.argoproj.io/sync-wave: "0"}
 rules:
   - apiGroups: [tekton.dev]
@@ -34,7 +47,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: image-promoter-launcher
-  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  namespace: {{ $targetNamespace }}
   annotations: {argocd.argoproj.io/sync-wave: "0"}
 subjects:
   - {kind: ServiceAccount, name: image-promoter}
@@ -44,191 +57,41 @@ roleRef:
   name: image-promoter-launcher
 ---
 apiVersion: tekton.dev/v1
-kind: Task
-metadata:
-  name: skopeo-copy-image
-  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
-  annotations: {argocd.argoproj.io/sync-wave: "0"}
-spec:
-  params:
-    - {name: component, type: string}
-    - {name: image-tag, type: string}
-    - {name: source-environment, type: string}
-    - {name: source-namespace, type: string}
-    - {name: target-environment, type: string}
-    - {name: target-namespace, type: string}
-    - {name: registry-host, type: string}
-    - {name: registry-cluster-id, type: string}
-    - {name: source-secret-name, type: string}
-  results:
-    - {name: sourceDigest}
-    - {name: destinationDigest}
-    - {name: sourceImage}
-    - {name: destinationImage}
-  volumes:
-    - name: source-auth
-      emptyDir: {}
-    - name: destination-auth
-      secret:
-        secretName: {{ .Values.registry.credentials.destinationPushSecretName }}
-        defaultMode: 0400
-        items:
-          - {key: .dockerconfigjson, path: auth.json}
-  steps:
-    - name: fetch-source-auth
-      image: quay.io/openshift/origin-cli:4.16
-      volumeMounts:
-        - {name: source-auth, mountPath: /workspace/source-auth}
-      script: |
-        #!/bin/sh
-        set -eu
-        umask 077
-        auth_file=/workspace/source-auth/auth.json
-        trap 'rm -f "$auth_file"' EXIT HUP INT TERM
-        attempt=1
-        while [ "$attempt" -le 6 ]; do
-          if oc get secret "$(params.source-secret-name)" \
-            -n "$(params.source-namespace)" \
-            -o jsonpath='{.data.\.dockerconfigjson}' |
-            base64 -d >"$auth_file" &&
-            [ -s "$auth_file" ]; then
-            chmod 0600 "$auth_file"
-            trap - EXIT
-            exit 0
-          fi
-          rm -f "$auth_file"
-          sleep $((attempt * 2))
-          attempt=$((attempt + 1))
-        done
-        echo "Named source registry credential was not readable after bounded retry." >&2
-        exit 1
-    - name: copy-and-verify
-      image: quay.io/skopeo/stable:v1.17.0
-      volumeMounts:
-        - {name: source-auth, mountPath: /workspace/source-auth}
-        - {name: destination-auth, mountPath: /workspace/destination-auth, readOnly: true}
-      script: |
-        #!/bin/sh
-        set -eu
-        source_auth=/workspace/source-auth/auth.json
-        destination_auth=/workspace/destination-auth/auth.json
-        trap 'rm -f "$source_auth"' EXIT HUP INT TERM
-
-        component="$(params.component)"
-        tag="$(params.image-tag)"
-        source_environment="$(params.source-environment)"
-        target_environment="$(params.target-environment)"
-        case "$component" in
-          ''|*[!a-z0-9-]*|-*|*-) echo "Unsafe Component name." >&2; exit 2 ;;
-        esac
-        printf '%s\n' "$tag" |
-          grep -Eq '^v[0-9]+(\.[0-9]+){0,2}(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$' || {
-            echo "Promotion requires an immutable human release such as v1.7.3." >&2
-            exit 2
-          }
-        case "$source_environment:$target_environment" in
-          {{ $sourceName }}:{{ .Values.environment.name }}) ;;
-          *) echo "Promotion edge is not the configured adjacent edge." >&2; exit 2 ;;
-        esac
-
-        source_repository="$(params.registry-host)/$(params.registry-cluster-id)_$(params.source-namespace)/$component"
-        destination_repository="$(params.registry-host)/$(params.registry-cluster-id)_$(params.target-namespace)/$component"
-        source_tag="docker://$source_repository:$tag"
-        destination_tag="docker://$destination_repository:$tag"
-
-        inspect_digest() {
-          auth_file="$1"
-          image="$2"
-          skopeo inspect --authfile "$auth_file" --format '{{ "{{.Digest}}" }}' "$image"
-        }
-
-        source_digest=
-        attempt=1
-        while [ "$attempt" -le 6 ]; do
-          if source_digest="$(inspect_digest "$source_auth" "$source_tag" 2>/dev/null)" &&
-            [ -n "$source_digest" ]; then
-            break
-          fi
-          source_digest=
-          sleep $((attempt * 2))
-          attempt=$((attempt + 1))
-        done
-        if [ -z "$source_digest" ]; then
-          echo "Source tag or repository was not available after bounded retry." >&2
-          exit 1
-        fi
-        case "$source_digest" in sha256:*) ;; *) echo "Source digest is invalid." >&2; exit 1 ;; esac
-
-        destination_digest=
-        if destination_digest="$(inspect_digest "$destination_auth" "$destination_tag" 2>/dev/null)"; then
-          if [ "$destination_digest" != "$source_digest" ]; then
-            echo "Destination tag already exists with a different digest; refusing overwrite." >&2
-            exit 1
-          fi
-        else
-          destination_digest=
-          attempt=1
-          while [ "$attempt" -le 6 ]; do
-            if skopeo copy --all --preserve-digests \
-              --src-authfile "$source_auth" \
-              --dest-authfile "$destination_auth" \
-              "docker://$source_repository@$source_digest" "$destination_tag"; then
-              break
-            fi
-            sleep $((attempt * 2))
-            attempt=$((attempt + 1))
-          done
-          if [ "$attempt" -gt 6 ]; then
-            echo "Destination repository was not writable after bounded retry." >&2
-            exit 1
-          fi
-          attempt=1
-          while [ "$attempt" -le 6 ]; do
-            if destination_digest="$(inspect_digest "$destination_auth" "$destination_tag" 2>/dev/null)" &&
-              [ -n "$destination_digest" ]; then
-              break
-            fi
-            destination_digest=
-            sleep $((attempt * 2))
-            attempt=$((attempt + 1))
-          done
-        fi
-        if [ "$source_digest" != "$destination_digest" ]; then
-          echo "Destination digest verification failed." >&2
-          exit 1
-        fi
-
-        printf '%s' "$source_digest" >"$(results.sourceDigest.path)"
-        printf '%s' "$destination_digest" >"$(results.destinationDigest.path)"
-        printf '%s' "$source_repository@$source_digest" >"$(results.sourceImage.path)"
-        printf '%s' "$destination_repository:$tag" >"$(results.destinationImage.path)"
----
-apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
   name: promote-image
-  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  namespace: {{ $targetNamespace }}
   annotations: {argocd.argoproj.io/sync-wave: "0"}
 spec:
   params:
     - {name: component, type: string}
     - {name: image-tag, type: string}
   results:
-    - {name: sourceDigest, value: $(tasks.copy.results.sourceDigest)}
-    - {name: destinationDigest, value: $(tasks.copy.results.destinationDigest)}
-    - {name: sourceImage, value: $(tasks.copy.results.sourceImage)}
-    - {name: destinationImage, value: $(tasks.copy.results.destinationImage)}
+    - {name: sourceDigest, value: $(tasks.copy.results.SOURCE_DIGEST)}
+    - {name: destinationDigest, value: $(tasks.copy.results.DESTINATION_DIGEST)}
+    - {name: sourceImage, value: {{ printf "%s/%s_%s/$(params.component):$(params.image-tag)" .Values.registry.host .Values.registry.clusterId $sourceNamespace | quote }}}
+    - {name: destinationImage, value: {{ printf "%s/%s_%s/$(params.component):$(params.image-tag)" .Values.registry.host .Values.registry.clusterId $targetNamespace | quote }}}
   tasks:
-    - name: copy
-      taskRef: {name: skopeo-copy-image}
+    - name: assert-release-version
+      taskRef: {name: assert-image-tag-compatible}
       params:
-        - {name: component, value: $(params.component)}
-        - {name: image-tag, value: $(params.image-tag)}
-        - {name: source-environment, value: {{ $sourceName | quote }}}
-        - {name: source-namespace, value: {{ printf "%s%s" .Values.systemName $source.namespaceSuffix | quote }}}
-        - {name: target-environment, value: {{ .Values.environment.name | quote }}}
-        - {name: target-namespace, value: {{ printf "%s%s" .Values.systemName .Values.environment.namespaceSuffix | quote }}}
-        - {name: registry-host, value: {{ .Values.registry.host | quote }}}
-        - {name: registry-cluster-id, value: {{ .Values.registry.clusterId | quote }}}
-        - {name: source-secret-name, value: {{ .Values.registry.credentials.sourcePullSecretName | quote }}}
+        - name: source-image
+          value: {{ printf "docker://%s/%s_%s/$(params.component):$(params.image-tag)" .Values.registry.host .Values.registry.clusterId $sourceNamespace | quote }}
+        - name: destination-image
+          value: {{ printf "docker://%s/%s_%s/$(params.component):$(params.image-tag)" .Values.registry.host .Values.registry.clusterId $targetNamespace | quote }}
+    - name: copy
+      runAfter: [assert-release-version]
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: skopeo-copy}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - name: SOURCE_IMAGE_URL
+          value: {{ printf "docker://%s/%s_%s/$(params.component)@$(tasks.assert-release-version.results.sourceDigest)" .Values.registry.host .Values.registry.clusterId $sourceNamespace | quote }}
+        - name: DESTINATION_IMAGE_URL
+          value: {{ printf "docker://%s/%s_%s/$(params.component):$(params.image-tag)" .Values.registry.host .Values.registry.clusterId $targetNamespace | quote }}
+        - {name: SRC_TLS_VERIFY, value: "true"}
+        - {name: DEST_TLS_VERIFY, value: "true"}
 {{- end }}

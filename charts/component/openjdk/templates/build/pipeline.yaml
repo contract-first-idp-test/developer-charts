@@ -89,7 +89,7 @@ spec:
       taskSpec:
         steps:
           - name: rollout
-            image: quay.io/openshift/origin-cli:4.16
+            image: registry.redhat.io/openshift4/ose-cli
             script: |
               #!/bin/sh
               set -eu
@@ -100,48 +100,32 @@ spec:
               oc rollout restart deployment/{{ .Values.componentName }} -n {{ .Values.namespace }}
               oc rollout status deployment/{{ .Values.componentName }} -n {{ .Values.namespace }} --timeout=2m
 {{- end }}
-    - name: materialize-release
+    - name: assert-release-version
       runAfter: [clone]
       when:
         - {input: $(params.release-version), operator: notin, values: [""]}
+      taskRef:
+        name: assert-image-tag-compatible
       params:
-        - {name: git-commit, value: $(tasks.clone.results.COMMIT)}
-        - {name: release-version, value: $(params.release-version)}
-        - {name: image-repository, value: $(params.image-repository)}
-      taskSpec:
+        - name: source-image
+          value: docker://$(params.image-repository):git-$(tasks.clone.results.COMMIT)
+        - name: destination-image
+          value: docker://$(params.image-repository):$(params.release-version)
+    - name: materialize-release
+      runAfter: [assert-release-version]
+      when:
+        - {input: $(params.release-version), operator: notin, values: [""]}
+      taskRef:
+        resolver: cluster
         params:
-          - {name: git-commit, type: string}
-          - {name: release-version, type: string}
-          - {name: image-repository, type: string}
-        results:
-          - {name: sourceDigest}
-          - {name: releaseDigest}
-        volumes:
-          - name: registry-auth
-            secret:
-              secretName: {{ .Values.build.registryPushSecretName }}
-              defaultMode: 0400
-              items:
-                - {key: .dockerconfigjson, path: auth.json}
-        steps:
-          - name: alias-existing-commit-image
-            image: quay.io/skopeo/stable:v1.17.0
-            volumeMounts:
-              - {name: registry-auth, mountPath: /workspace/registry-auth, readOnly: true}
-            script: |
-              #!/bin/sh
-              set -eu
-
-              repository="$(params.image-repository)"
-              commit="$(params.git-commit)"
-              release="$(params.release-version)"
-              auth_file=/workspace/registry-auth/auth.json
-
-              skopeo copy --all --preserve-digests \
-                --src-authfile "$auth_file" \
-                --dest-authfile "$auth_file" \
-                "docker://$repository:git-$commit" \
-                "docker://$repository:$release"
-
-              echo "Released git-$commit as $release."
+          - {name: kind, value: task}
+          - {name: name, value: skopeo-copy}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - name: SOURCE_IMAGE_URL
+          value: docker://$(params.image-repository)@$(tasks.assert-release-version.results.sourceDigest)
+        - name: DESTINATION_IMAGE_URL
+          value: docker://$(params.image-repository):$(params.release-version)
+        - {name: SRC_TLS_VERIFY, value: "true"}
+        - {name: DEST_TLS_VERIFY, value: "true"}
 {{- end }}

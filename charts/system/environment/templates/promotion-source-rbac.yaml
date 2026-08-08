@@ -5,34 +5,91 @@
 {{- end }}
 {{- if ne (first $order) .Values.build.environment }}{{ fail "build environment must be first in the ordered promotion lifecycle" }}{{- end }}
 {{- if lt $currentIndex 0 }}{{ fail (printf "environment %q is not ordered" .Values.environment.name) }}{{- end }}
-{{- if lt $currentIndex (sub (len $order) 1) }}
-{{- $targetName := index $order (add $currentIndex 1) }}
-{{- $target := index .Values.environments.definitions $targetName }}
-{{- if not $target }}{{ fail (printf "ordered environment %q has no definition" $targetName) }}{{- end }}
+{{- if gt $currentIndex 0 }}
+{{- $sourceName := index $order (sub $currentIndex 1) }}
+{{- $source := index .Values.environments.definitions $sourceName }}
+{{- if not $source }}{{ fail (printf "ordered environment %q has no definition" $sourceName) }}{{- end }}
+{{- $sourceNamespace := printf "%s%s" .Values.systemName $source.namespaceSuffix }}
+{{- $targetNamespace := printf "%s%s" .Values.systemName .Values.environment.namespaceSuffix }}
+{{- $sourceCredentialName := printf "image-promoter-source-%s" $sourceName | trunc 63 | trimSuffix "-" }}
+{{- $sourceRegistryScope := printf "%s/%s_%s" .Values.registry.host .Values.registry.clusterId $sourceNamespace }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: image-promoter-source-reader
+  namespace: {{ $targetNamespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: image-promoter-source-credential
-  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  namespace: {{ $sourceNamespace }}
   annotations: {argocd.argoproj.io/sync-wave: "0"}
 rules:
   - apiGroups: [""]
     resources: [secrets]
     resourceNames: [{{ .Values.registry.credentials.sourcePullSecretName }}]
     verbs: [get]
+  - apiGroups: [authorization.k8s.io]
+    resources: [selfsubjectrulesreviews]
+    verbs: [create]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: image-promoter-from-{{ .Values.environment.name }}-to-{{ $targetName }}
-  namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
+  name: image-promoter-from-{{ $sourceName }}-to-{{ .Values.environment.name }}
+  namespace: {{ $sourceNamespace }}
   annotations: {argocd.argoproj.io/sync-wave: "0"}
 subjects:
   - kind: ServiceAccount
-    name: pipeline
-    namespace: {{ .Values.systemName }}{{ $target.namespaceSuffix }}
+    name: image-promoter-source-reader
+    namespace: {{ $targetNamespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: image-promoter-source-credential
+---
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: image-promoter-source
+  namespace: {{ $targetNamespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+spec:
+  provider:
+    kubernetes:
+      remoteNamespace: {{ $sourceNamespace }}
+      server:
+        url: https://kubernetes.default.svc
+        caProvider:
+          type: ConfigMap
+          name: kube-root-ca.crt
+          key: ca.crt
+      auth:
+        serviceAccount:
+          name: image-promoter-source-reader
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $sourceCredentialName }}
+  namespace: {{ $targetNamespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+spec:
+  refreshInterval: 1m
+  secretStoreRef:
+    kind: SecretStore
+    name: image-promoter-source
+  target:
+    name: {{ $sourceCredentialName }}
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      type: kubernetes.io/dockerconfigjson
+      data:
+        .dockerconfigjson: {{ printf "{{- $config := (index . %q | fromJson) -}}{{ dict %q (dict %q (index (index $config %q) %q)) | toJson }}" ".dockerconfigjson" "auths" $sourceRegistryScope "auths" .Values.registry.host | quote }}
+  dataFrom:
+    - extract:
+        key: {{ .Values.registry.credentials.sourcePullSecretName }}
 {{- end }}

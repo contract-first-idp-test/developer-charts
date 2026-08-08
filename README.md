@@ -119,12 +119,15 @@ release, and target registry infrastructure can exist before an image arrives.
 - Image promotion is adjacent and forward-only.
 - Release materialization copies an existing `git-<sha>` build image to a human tag; source is not
   rebuilt for release or promotion.
+- CF-IDP delegates every registry copy to the OpenShift Pipelines curated `skopeo-copy` Task. A
+  small pre-copy digest guard prevents a human version from being reassigned to another artifact.
 - Tenant Git chooses desired state. Platform values choose trusted chart sources and infrastructure
   integration.
 - One Domain Application owns the Domain AppProject; System build-environment Applications own
   their derived System projects.
-- Registry credentials remain namespace-local; promotion reads a named source Secret through
-  narrowly scoped RBAC and never copies the Secret.
+- Registry credentials used by a PipelineRun remain namespace-local. External Secrets distributes
+  the immediately preceding environment's narrowly scoped pull credential into the target
+  namespace, where Tekton combines it with the target push credential.
 
 The [architecture guide](docs/architecture.md) explains these rules and their data flow in detail.
 
@@ -137,6 +140,7 @@ At minimum, the target cluster needs:
 - OpenShift Pipelines with the cluster resolver enabled;
 - `git-clone` and `buildah` Tasks in `openshift-pipelines`;
 - the `skopeo-copy` Task in `openshift-pipelines`;
+- External Secrets Operator for adjacent promotion credential distribution;
 - the curated Java 21 `maven` Task in `tekton-tasks`;
 - Quay Bridge with the expected namespace-local robot Secrets;
 - a Schema Registry reachable without credentials from API Pipelines and generated Components, or
@@ -182,8 +186,8 @@ make test
 - Tenant source repositories must be public for anonymous Tekton clone.
 - Webhook signature verification is reserved but not implemented for the lab EventListeners.
 - Component builds package with `-DskipTests`; run tests in a separate required check.
-- Component release materialization can replace an existing human tag unless Quay or release
-  policy prevents it.
+- The digest guard protects human release tags at Pipeline execution time; CF-IDP does not
+  configure Quay immutable-tag policies.
 - Quay Bridge robot ACLs are external to these charts and require operational validation.
 - PostgreSQL is the only included Resource implementation.
 - `build.sccClusterRoleName` remains a reserved value; leaf charts do not consume it directly.

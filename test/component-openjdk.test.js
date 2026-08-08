@@ -36,6 +36,10 @@ function promotionValues(tag = 'v1.2.3') {
   return values;
 }
 
+function resolvedTask(task) {
+  return Object.fromEntries(task.taskRef.params.map(param => [param.name, param.value]));
+}
+
 test('environment-only OpenJDK state creates an ImageStream without a workload', () => {
   const values = chartValues('charts/component/openjdk');
   values.systemName = 'orders';
@@ -71,6 +75,30 @@ test('OpenJDK chart renders build and latest runtime contracts', () => {
 
   const materialize = pipeline.spec.tasks.find(task => task.name === 'materialize-release');
   assert.doesNotMatch(YAML.stringify(materialize), /maven|buildah/i);
+  assert.equal(materialize.taskRef.resolver, 'cluster');
+  assert.deepEqual(resolvedTask(materialize), {
+    kind: 'task',
+    name: 'skopeo-copy',
+    namespace: 'openshift-pipelines',
+  });
+  assert.doesNotMatch(YAML.stringify(materialize), /taskSpec|skopeo copy|quay\.io\/skopeo/i);
+  const guard = pipeline.spec.tasks.find(task => task.name === 'assert-release-version');
+  assert.equal(guard.taskRef.name, 'assert-image-tag-compatible');
+  assert.deepEqual(materialize.runAfter, ['assert-release-version']);
+  assert.match(Object.fromEntries(materialize.params.map(param => [param.name, param.value]))
+    .SOURCE_IMAGE_URL, /@\$\(tasks\.assert-release-version\.results\.sourceDigest\)$/);
+  for (const copyTaskName of ['publish-latest', 'materialize-release']) {
+    const copyTask = pipeline.spec.tasks.find(task => task.name === copyTaskName);
+    assert.deepEqual(copyTask.params.map(param => param.name), [
+      'SOURCE_IMAGE_URL',
+      'DESTINATION_IMAGE_URL',
+      'SRC_TLS_VERIFY',
+      'DEST_TLS_VERIFY',
+    ]);
+  }
+  const restart = pipeline.spec.tasks.find(task => task.name === 'restart-runtime');
+  assert.equal(restart.taskSpec.steps.find(step => step.name === 'rollout').image,
+    'registry.redhat.io/openshift4/ose-cli');
   assert.equal(resources.some(item => item.kind === 'Secret'), false);
 });
 
@@ -94,6 +122,7 @@ test('promoted OpenJDK runtime omits build resources and produces stable release
 
   const wait = firstJob.spec.template.spec.initContainers.find(container =>
     container.name === 'wait-for-promotion-pipeline');
+  assert.equal(wait.image, 'registry.redhat.io/openshift4/ose-cli');
   const waitScript = wait.args.join('\n');
   assert.match(waitScript, /oc get pipeline\.tekton\.dev "\$PIPELINE_NAME"/);
   assert.match(waitScript, /max_attempts=31/);
@@ -101,6 +130,7 @@ test('promoted OpenJDK runtime omits build resources and produces stable release
   assert.match(waitScript, /300 seconds/);
   assert.doesNotMatch(YAML.stringify(firstJob), /tkn pipeline describe/);
   assert.match(firstJob.spec.template.spec.containers[0].args.join('\n'), /tkn pipeline start/);
+  assert.doesNotMatch(YAML.stringify(firstJob), /quay\.io\/openshift\/origin-cli:4\.16/);
 });
 
 test('component promotion rejects mutable latest outside the build environment', () => {
