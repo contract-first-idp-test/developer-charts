@@ -10,12 +10,13 @@ spec:
     - {name: source-image, type: string}
     - {name: destination-image, type: string}
   results:
-    - {name: sourceDigest, description: Digest resolved from the source image.}
-    - {name: destinationDigest, description: Existing destination digest, if present.}
-    - {name: destinationExists, description: Whether the destination tag already exists.}
+    - {name: sourceDigest, type: string, description: Digest resolved from the source image.}
+    - {name: destinationDigest, type: string, description: Existing destination digest, if present.}
+    - {name: destinationExists, type: string, description: Whether the destination tag already exists.}
   steps:
     - name: compare-digests
       image: quay.io/skopeo/stable:v1.17.0
+      computeResources: {}
       env:
         - {name: SOURCE_IMAGE, value: $(params.source-image)}
         - {name: DESTINATION_IMAGE, value: $(params.destination-image)}

@@ -69,8 +69,6 @@ spec:
   results:
     - {name: sourceDigest, value: $(tasks.copy.results.SOURCE_DIGEST)}
     - {name: destinationDigest, value: $(tasks.copy.results.DESTINATION_DIGEST)}
-    - {name: sourceImage, value: {{ printf "%s/%s_%s/$(params.component):$(params.image-tag)" .Values.registry.host .Values.registry.clusterId $sourceNamespace | quote }}}
-    - {name: destinationImage, value: {{ printf "%s/%s_%s/$(params.component):$(params.image-tag)" .Values.registry.host .Values.registry.clusterId $targetNamespace | quote }}}
   tasks:
     - name: assert-release-version
       taskRef: {name: assert-image-tag-compatible}
