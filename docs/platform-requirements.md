@@ -49,6 +49,12 @@ OpenShift Pipelines credential initializer must be enabled so `kubernetes.io/doc
 Secrets associated with that ServiceAccount are merged into `$HOME/.docker/config.json` for the
 guard and curated copy Task.
 
+CF-IDP declares those Tekton credentials under `ServiceAccount.secrets` and does not manage
+`ServiceAccount.imagePullSecrets`, which OpenShift mutates with generated registry references. The
+platform Argo CD instance ignores `/imagePullSecrets` globally for ServiceAccounts. Runtime
+Deployment pull credentials remain separately declared through the component chart's pod-level
+`imagePullSecrets` support.
+
 The configured build ServiceAccount must be allowed to run Pipelines under the platform's selected
 pipelines SCC. The current `build.sccClusterRoleName` value is reserved and does not create that
 authorization; grant it outside these charts.
@@ -152,7 +158,7 @@ shared-secret design is added.
 - Tekton's cluster resolver is enabled.
 - All four required Tasks resolve in their expected namespaces.
 - Tekton v1 Pipelines and v1beta1 Triggers with CEL interceptors are available.
-- Build and target `pipeline` ServiceAccounts exist, contain the expected registry Secret
+- Build and target `pipeline` ServiceAccounts exist, contain the expected `secrets` registry
   references, and can use the required SCC.
 - Schema Registry is reachable at the target-owned URL and accepts the configured unauthenticated Maven
   requests.

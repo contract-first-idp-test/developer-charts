@@ -145,7 +145,12 @@ test('system lints and renders the namespace and chart discovery contracts', () 
 test('first active environment does not provision resources into a future namespace', () => {
   const devResources = render('charts/system/environment', environmentValues('sandbox'));
   resource(devResources, 'Namespace', 'orders-build');
-  resource(devResources, 'ServiceAccount', 'orders-build');
+  const buildServiceAccount = resource(devResources, 'ServiceAccount', 'orders-build');
+  const pipelineServiceAccount = resource(devResources, 'ServiceAccount', 'pipeline');
+  for (const serviceAccount of [buildServiceAccount, pipelineServiceAccount]) {
+    assert.deepEqual(serviceAccount.secrets, [{name: 'destination-registry-auth'}]);
+    assert.equal(serviceAccount.imagePullSecrets, undefined);
+  }
   assert.equal(devResources.some(item => item.kind === 'SecretStore'), false);
   assert.equal(devResources.some(item => item.kind === 'ExternalSecret'), false);
   assert.equal(devResources.some(item =>

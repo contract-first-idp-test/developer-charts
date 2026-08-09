@@ -71,6 +71,11 @@ ServiceAccount can submit the target-local PipelineRun but cannot read registry 
 `pipeline` ServiceAccount references only local Secrets and has no cross-namespace Secret access.
 RBAC grants no reverse, non-adjacent, or cross-namespace PipelineRun access.
 
+Build and promotion registry credentials are declared under `ServiceAccount.secrets` for Tekton's
+credential initializer. The charts do not manage `ServiceAccount.imagePullSecrets`; OpenShift owns
+that generated field. This does not change the pod-level `imagePullSecrets` rendered by workload
+charts for runtime image pulls.
+
 ## Validate
 
 ```bash

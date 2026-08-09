@@ -74,6 +74,7 @@ test('Domain uses tenant identity and trusted platform inputs', () => {
   assert.equal(application.sources[0].repoURL,
     'https://platform-gitea.example/platform-private/developer-charts.git');
   assert.equal(application.sources[0].targetRevision, 'v1.0.0');
+  assert.equal(application.ignoreDifferences, undefined);
   assert.equal(valuesObject.environment.name, 'stage');
   assert.equal(valuesObject.environment.namespaceSuffix, '-preprod');
   assert.equal(valuesObject.environment.clusterDomain, 'apps.west.example');

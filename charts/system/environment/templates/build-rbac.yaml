@@ -7,8 +7,6 @@ metadata:
   annotations: {argocd.argoproj.io/sync-wave: "0"}
 secrets:
   - name: {{ .Values.registry.credentials.destinationPushSecretName }}
-imagePullSecrets:
-  - name: {{ .Values.registry.credentials.destinationPushSecretName }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -17,8 +15,6 @@ metadata:
   namespace: {{ .Values.systemName }}{{ .Values.environment.namespaceSuffix }}
   annotations: {argocd.argoproj.io/sync-wave: "0"}
 secrets:
-  - name: {{ .Values.registry.credentials.destinationPushSecretName }}
-imagePullSecrets:
   - name: {{ .Values.registry.credentials.destinationPushSecretName }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
