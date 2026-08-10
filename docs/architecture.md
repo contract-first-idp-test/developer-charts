@@ -1,9 +1,11 @@
 # Architecture
 
+[Back to the repository overview](../README.md)
+
 The developer charts translate reviewed tenant Git state into OpenShift resources. The design keeps
 tenant intent, platform policy, and runtime reconciliation separate.
 
-## Why the implementation is centralized
+## Centralized implementation policy
 
 The charts are a policy layer, not just a collection of reusable YAML. They answer questions
 that tenant intent should not answer independently: which Task implementations are trusted, where
@@ -124,6 +126,9 @@ spec:
 
 The build environment must be first. Source builds happen only there; image promotion moves to the
 immediately following environment.
+
+`spec.platformTarget` reserves a target-selection seam, but environment-level multi-cluster
+placement is not implemented in this release. Every Domain environment uses the selected target.
 
 ```mermaid
 flowchart TD

@@ -1,5 +1,7 @@
 # Development and testing
 
+[Back to the repository overview](../README.md)
+
 Use this guide when changing chart templates, schemas, platform contracts, or test fixtures.
 
 ## Prerequisites

@@ -1,5 +1,7 @@
 # Operations and troubleshooting
 
+[Back to the repository overview](../README.md)
+
 This guide focuses on expected convergence behavior and safe retry procedures.
 
 ## Start with ownership
