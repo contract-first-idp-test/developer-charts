@@ -34,6 +34,25 @@ spec:
       spec:
         taskRunTemplate:
           serviceAccountName: pipeline
+        taskRunSpecs:
+          - pipelineTaskName: publish-git-version
+            podTemplate:
+              env:
+                - {name: APICURIO_AUTH_SERVER_URL, value: {{ .Values.schemaRegistry.authServerUrl | quote }}}
+                - {name: APICURIO_CLIENT_ID, valueFrom: {secretKeyRef: {name: apicurio-client, key: client-id}}}
+                - {name: APICURIO_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: apicurio-client, key: client-secret}}}
+          - pipelineTaskName: publish-release-version
+            podTemplate:
+              env:
+                - {name: APICURIO_AUTH_SERVER_URL, value: {{ .Values.schemaRegistry.authServerUrl | quote }}}
+                - {name: APICURIO_CLIENT_ID, valueFrom: {secretKeyRef: {name: apicurio-client, key: client-id}}}
+                - {name: APICURIO_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: apicurio-client, key: client-secret}}}
+          - pipelineTaskName: microcks-import
+            podTemplate:
+              env:
+                - {name: MICROCKS_URL, value: {{ .Values.microcks.url | quote }}}
+                - {name: MICROCKS_CLIENT_ID, valueFrom: {secretKeyRef: {name: microcks-client, key: client-id}}}
+                - {name: MICROCKS_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: microcks-client, key: client-secret}}}
         pipelineRef: {name: {{ .Values.apiName }}-api}
         params:
           - {name: git-url, value: {{ .Values.repository | quote }}}

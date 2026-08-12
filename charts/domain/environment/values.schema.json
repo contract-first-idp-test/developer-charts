@@ -68,7 +68,7 @@
         },
         "platform": {
           "type": "object",
-          "required": ["target", "argocd", "cluster", "charts", "schemaRegistry", "spectralRules", "registry", "build"],
+          "required": ["target", "argocd", "cluster", "charts", "schemaRegistry", "services", "security", "spectralRules", "registry", "build"],
           "properties": {
             "target": {
               "type": "object",
@@ -94,8 +94,54 @@
             },
             "schemaRegistry": {
               "type": "object",
-              "required": ["apiUrl"],
-              "properties": {"apiUrl": {"type": "string", "format": "uri"}}
+              "required": ["apiUrl", "authServerUrl"],
+              "properties": {
+                "apiUrl": {"type": "string", "format": "uri"},
+                "uiUrl": {"type": "string", "format": "uri"},
+                "authServerUrl": {"type": "string", "format": "uri"}
+              },
+              "additionalProperties": false
+            },
+            "services": {
+              "type": "object",
+              "required": ["microcks"],
+              "properties": {
+                "devSpaces": {"type": "object", "additionalProperties": true},
+                "developerHub": {"type": "object", "additionalProperties": true},
+                "keycloak": {"type": "object", "additionalProperties": true},
+                "microcks": {
+                  "type": "object",
+                  "required": ["url"],
+                  "properties": {"url": {"type": "string", "format": "uri"}},
+                  "additionalProperties": true
+                },
+                "hawtio": {"type": "object", "additionalProperties": true},
+                "gitea": {"type": "object", "additionalProperties": true}
+              },
+              "additionalProperties": false
+            },
+            "security": {
+              "type": "object",
+              "required": ["keycloak", "secrets"],
+              "properties": {
+                "keycloak": {
+                  "type": "object",
+                  "required": ["namespace", "instanceName", "realm"],
+                  "properties": {
+                    "namespace": {"type": "string", "minLength": 1},
+                    "instanceName": {"type": "string", "minLength": 1},
+                    "realm": {"type": "string", "minLength": 1}
+                  },
+                  "additionalProperties": false
+                },
+                "secrets": {
+                  "type": "object",
+                  "required": ["namespace"],
+                  "properties": {"namespace": {"type": "string", "minLength": 1}},
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
             },
             "spectralRules": {
               "type": "object",

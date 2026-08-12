@@ -8,11 +8,11 @@ Resources; the build environment also discovers APIs.
 | Pattern | Scope | Result |
 | --- | --- | --- |
 | `apis/*/values.yaml` | Build environment only | OpenAPI publication Applications |
-| `components/*/environments/<environment>.yaml` | Selected environment | OpenJDK Component Applications |
+| `components/*/environments/<environment>.yaml` | Selected environment | Container Component Applications |
 | `resources/*/*/environments/<environment>.yaml` | Selected environment | Resource implementation Applications |
 
 Each active Component environment has one Application. It loads base and environment values plus
-an optional `components/<component>/releases/<environment>.yaml` file. The OpenJDK chart creates the
+an optional `components/<component>/releases/<environment>.yaml` file. The Container chart creates the
 ImageStream immediately and waits for `image.tag` before creating workload resources.
 
 ## Responsibilities

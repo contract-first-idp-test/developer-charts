@@ -26,6 +26,13 @@ spec:
       revision: v1.0.0
     schemaRegistry:
       apiUrl: https://registry.example/apis/registry/v3
+      authServerUrl: https://keycloak.example/realms/platform
+    services:
+      microcks:
+        url: https://microcks.example
+    security:
+      keycloak: {namespace: keycloak, instanceName: cf-idp-keycloak, realm: platform}
+      secrets: {namespace: cf-idp-secrets}
     spectralRules:
       repositoryUrl: https://platform-gitea.example/platform-private/spectral-rules.git
       revision: v1.0.0

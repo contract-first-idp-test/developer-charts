@@ -1,0 +1,145 @@
+{{- $domain := .Values.metadata.name -}}
+{{- $keycloak := .Values.spec.platform.security.keycloak -}}
+{{- $secretsNamespace := .Values.spec.platform.security.secrets.namespace -}}
+{{- range $service, $role := dict "apicurio" "sr-developer" "microcks" "microcks-publisher" }}
+{{- $client := printf "%s-%s" $domain $service }}
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: {{ $client }}
+  namespace: {{ $secretsNamespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "-2"}
+spec:
+  length: 48
+  digits: 8
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+  secretKeys: [clientSecret]
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $client }}
+  namespace: {{ $secretsNamespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "-1"}
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: {{ $client }}
+    creationPolicy: Owner
+    deletionPolicy: Delete
+    template:
+      engineVersion: v2
+      data:
+        client-id: {{ $client | quote }}
+        client-secret: '{{ `{{ .clientSecret }}` }}'
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: {{ $client }}
+{{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $domain }}-publisher-reader
+  namespace: {{ $secretsNamespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $domain }}-publisher-reader
+  namespace: {{ $secretsNamespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [{{ $domain }}-apicurio, {{ $domain }}-microcks]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $domain }}-publisher-reader
+  namespace: {{ $secretsNamespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+subjects:
+  - {kind: ServiceAccount, name: {{ $domain }}-publisher-reader, namespace: {{ $secretsNamespace }}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $domain }}-publisher-reader}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: {{ $domain }}-publishers
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+spec:
+  conditions:
+    - namespaceSelector:
+        matchLabels:
+          contract-first-idp.github.io/domain: {{ $domain | quote }}
+          platform.contract-first.io/build-environment: "true"
+  provider:
+    kubernetes:
+      remoteNamespace: {{ $secretsNamespace }}
+      server:
+        url: https://kubernetes.default.svc
+        caProvider: {type: ConfigMap, name: kube-root-ca.crt, namespace: {{ $secretsNamespace }}, key: ca.crt}
+      auth:
+        serviceAccount: {name: {{ $domain }}-publisher-reader, namespace: {{ $secretsNamespace }}}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: {{ $domain }}-keycloak-publishers
+  annotations: {argocd.argoproj.io/sync-wave: "0"}
+spec:
+  conditions:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ $keycloak.namespace | quote }}
+  provider:
+    kubernetes:
+      remoteNamespace: {{ $secretsNamespace }}
+      server:
+        url: https://kubernetes.default.svc
+        caProvider: {type: ConfigMap, name: kube-root-ca.crt, namespace: {{ $secretsNamespace }}, key: ca.crt}
+      auth:
+        serviceAccount: {name: {{ $domain }}-publisher-reader, namespace: {{ $secretsNamespace }}}
+{{- range $service, $role := dict "apicurio" "sr-developer" "microcks" "microcks-publisher" }}
+{{- $client := printf "%s-%s" $domain $service }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $client }}
+  namespace: {{ $keycloak.namespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "1"}
+spec:
+  refreshPolicy: Periodic
+  refreshInterval: 1h
+  secretStoreRef: {kind: ClusterSecretStore, name: {{ $domain }}-keycloak-publishers}
+  target: {name: {{ $client }}, creationPolicy: Owner, deletionPolicy: Delete}
+  dataFrom: [{extract: {key: {{ $client }}}}]
+---
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: KeycloakOIDCClient
+metadata:
+  name: {{ $client }}
+  namespace: {{ $keycloak.namespace }}
+  annotations: {argocd.argoproj.io/sync-wave: "2"}
+spec:
+  keycloakCRName: {{ $keycloak.instanceName }}
+  realm: {{ $keycloak.realm }}
+  client:
+    enabled: true
+    loginFlows: [SERVICE_ACCOUNT]
+    auth:
+      method: client-secret
+      secretRef: {name: {{ $client }}, key: client-secret}
+    serviceAccountRoles: [{{ $role }}]
+{{- end }}

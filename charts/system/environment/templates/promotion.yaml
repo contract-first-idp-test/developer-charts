@@ -71,7 +71,12 @@ spec:
     - {name: destinationDigest, value: $(tasks.copy.results.DESTINATION_DIGEST)}
   tasks:
     - name: assert-release-version
-      taskRef: {name: assert-image-tag-compatible}
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: assert-image-tag-compatible}
+          - {name: namespace, value: tekton-tasks}
       params:
         - name: source-image
           value: {{ printf "docker://%s/%s_%s/$(params.component):$(params.image-tag)" .Values.registry.host .Values.registry.clusterId $sourceNamespace | quote }}

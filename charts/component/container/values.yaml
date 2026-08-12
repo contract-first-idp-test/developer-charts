@@ -9,10 +9,8 @@ image:
   tag: ""
   pullPolicy: Always
 runtime:
+  port: 8080
   health:
-    readinessPath: /q/health/ready
-    livenessPath: /q/health/live
-    port: 8080
     initialDelaySeconds: 10
     periodSeconds: 10
   resources:
@@ -33,12 +31,12 @@ promotion:
   sourceEnvironment: ""
 build:
   enabled: false
+  profile: quarkus-jvm
   serviceAccountName: pipeline
   registryPushSecretName: builder-quay-openshift
   environment: dev
   repository: https://example.invalid/service.git
   revision: main
-  dockerfilePath: ./src/main/docker/Dockerfile
   imageRepository: quay.example.invalid/example_example-dev/service
   deploymentUpdate:
     strategy: restart

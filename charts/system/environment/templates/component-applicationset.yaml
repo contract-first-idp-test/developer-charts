@@ -33,7 +33,7 @@ spec:
       sources:
         - repoURL: {{ .Values.delivery.charts.repository }}
           targetRevision: {{ .Values.delivery.charts.revision }}
-          path: charts/component/openjdk
+          path: charts/component/container
           helm:
             ignoreMissingValueFiles: true
             valueFiles:

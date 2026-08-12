@@ -1,4 +1,5 @@
 {{- if and .Values.build.enabled (eq .Values.environment .Values.build.environment) }}
+{{- $recipe := include "component.buildRecipe" . | fromYaml }}
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
@@ -40,14 +41,26 @@ spec:
         resolver: cluster
         params:
           - {name: kind, value: task}
-          - {name: name, value: maven}
-          - {name: namespace, value: tekton-tasks}
+          - {name: name, value: {{ $recipe.task }}}
+          - {name: namespace, value: {{ $recipe.taskNamespace }}}
       params:
-        - {name: GOALS, value: [clean, package, -DskipTests, -B]}
-        - {name: JAVA_VERSION, value: "21"}
+{{- if eq $recipe.executor "maven" }}
+        - name: GOALS
+          value:
+{{ toYaml $recipe.goals | indent 12 }}
+        - {name: MAVEN_IMAGE, value: {{ $recipe.builderImage | quote }}}
+{{- else if eq $recipe.executor "script" }}
+        - name: SCRIPT
+          value: |
+{{ $recipe.script | indent 12 }}
+{{- else }}
+{{- fail (printf "unsupported package executor %q" $recipe.executor) }}
+{{- end }}
       workspaces:
         - {name: source, workspace: source, subPath: source}
+{{- if eq $recipe.executor "maven" }}
         - {name: maven_settings, workspace: maven-settings}
+{{- end }}
     - name: build-and-push
       runAfter: [package]
       when:
@@ -60,7 +73,7 @@ spec:
           - {name: namespace, value: openshift-pipelines}
       params:
         - {name: IMAGE, value: $(params.image-repository):git-$(tasks.clone.results.COMMIT)}
-        - {name: DOCKERFILE, value: {{ .Values.build.dockerfilePath | quote }}}
+        - {name: DOCKERFILE, value: {{ $recipe.dockerfilePath | quote }}}
       workspaces: [{name: source, workspace: source, subPath: source}]
     - name: publish-latest
       runAfter: [build-and-push]
@@ -86,26 +99,32 @@ spec:
       runAfter: [publish-latest]
       when:
         - {input: $(params.release-version), operator: in, values: [""]}
-      taskSpec:
-        steps:
-          - name: rollout
-            image: registry.redhat.io/openshift4/ose-cli
-            script: |
-              #!/bin/sh
-              set -eu
-              if ! oc get deployment/{{ .Values.componentName }} -n {{ .Values.namespace }} >/dev/null 2>&1; then
-                echo "Deployment is not present yet; initial image build is complete."
-                exit 0
-              fi
-              oc rollout restart deployment/{{ .Values.componentName }} -n {{ .Values.namespace }}
-              oc rollout status deployment/{{ .Values.componentName }} -n {{ .Values.namespace }} --timeout=2m
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: openshift-client}
+          - {name: namespace, value: openshift-pipelines}
+      params:
+        - name: SCRIPT
+          value: |
+            if ! oc get deployment/{{ .Values.componentName }} -n {{ .Values.namespace }} >/dev/null 2>&1; then
+              echo "Deployment is not present yet; initial image build is complete."
+              exit 0
+            fi
+            oc rollout restart deployment/{{ .Values.componentName }} -n {{ .Values.namespace }}
+            oc rollout status deployment/{{ .Values.componentName }} -n {{ .Values.namespace }} --timeout=2m
 {{- end }}
     - name: assert-release-version
       runAfter: [clone]
       when:
         - {input: $(params.release-version), operator: notin, values: [""]}
       taskRef:
-        name: assert-image-tag-compatible
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: assert-image-tag-compatible}
+          - {name: namespace, value: tekton-tasks}
       params:
         - name: source-image
           value: docker://$(params.image-repository):git-$(tasks.clone.results.COMMIT)

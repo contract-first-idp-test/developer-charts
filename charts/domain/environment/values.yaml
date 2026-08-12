@@ -28,6 +28,13 @@ spec:
       revision: v1.0.0
     schemaRegistry:
       apiUrl: https://apicurio.example.invalid/apis/registry/v3
+      authServerUrl: https://keycloak.example.invalid/realms/platform
+    services:
+      microcks:
+        url: https://microcks.example.invalid
+    security:
+      keycloak: {namespace: keycloak, instanceName: cf-idp-keycloak, realm: platform}
+      secrets: {namespace: cf-idp-secrets}
     spectralRules:
       repositoryUrl: https://example.invalid/spectral-rules.git
       revision: v1.0.0

@@ -14,17 +14,35 @@ spec:
       restartPolicy: Never
       containers:
         - name: start-and-wait
-          image: registry.redhat.io/openshift-pipelines/pipelines-cli-tkn-rhel8:v1.15.4
-          command: [/bin/sh, -c]
+          image: registry.redhat.io/openshift4/ose-cli
+          command: [/bin/sh, -ec]
           args:
-            - >-
-              tkn pipeline start {{ .Values.apiName }}-api
-              --serviceaccount pipeline
-              --param git-url={{ .Values.repository }}
-              --param git-revision={{ .Values.revision }}
-              --workspace name=source,volumeClaimTemplateFile=/workspace/source-pvc.yaml
-              --use-param-defaults --showlog
-              --exit-with-pipelinerun-error
+            - |
+              run="$(oc create -f /workspace/pipelinerun.yaml -o name)"
+              run_name="${run##*/}"
+              deadline="$(( $(date +%s) + 30 * 60 ))"
+              while true; do
+                condition="$(oc get "$run" -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}{"|"}{.status.conditions[?(@.type=="Succeeded")].reason}{"|"}{.status.conditions[?(@.type=="Succeeded")].message}')"
+                status="${condition%%|*}"
+                details="${condition#*|}"
+                reason="${details%%|*}"
+                message="${details#*|}"
+                case "$status" in
+                  True)
+                    echo "PipelineRun $run_name succeeded"
+                    exit 0
+                    ;;
+                  False)
+                    echo "PipelineRun $run_name failed: ${reason:-UnknownReason}: ${message:-No message reported}" >&2
+                    exit 1
+                    ;;
+                esac
+                if [ "$(date +%s)" -ge "$deadline" ]; then
+                  echo "Timed out after 30m waiting for PipelineRun $run_name; last condition: ${status:-Unknown} ${reason:-UnknownReason}: ${message:-No message reported}" >&2
+                  exit 1
+                fi
+                sleep 2
+              done
           volumeMounts:
             - {name: workspace, mountPath: /workspace}
       volumes:
@@ -37,9 +55,40 @@ metadata:
   name: {{ .Values.apiName }}-api-initial-publish
   annotations: {argocd.argoproj.io/sync-wave: "1"}
 data:
-  source-pvc.yaml: |
+  pipelinerun.yaml: |
+    apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      generateName: {{ .Values.apiName }}-api-initial-
     spec:
-      accessModes: [ReadWriteOnce]
-      resources:
-        requests:
-          storage: 1Gi
+      taskRunTemplate:
+        serviceAccountName: pipeline
+      taskRunSpecs:
+        - pipelineTaskName: publish-git-version
+          podTemplate:
+            env:
+              - {name: APICURIO_AUTH_SERVER_URL, value: {{ .Values.schemaRegistry.authServerUrl | quote }}}
+              - {name: APICURIO_CLIENT_ID, valueFrom: {secretKeyRef: {name: apicurio-client, key: client-id}}}
+              - {name: APICURIO_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: apicurio-client, key: client-secret}}}
+        - pipelineTaskName: publish-release-version
+          podTemplate:
+            env:
+              - {name: APICURIO_AUTH_SERVER_URL, value: {{ .Values.schemaRegistry.authServerUrl | quote }}}
+              - {name: APICURIO_CLIENT_ID, valueFrom: {secretKeyRef: {name: apicurio-client, key: client-id}}}
+              - {name: APICURIO_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: apicurio-client, key: client-secret}}}
+        - pipelineTaskName: microcks-import
+          podTemplate:
+            env:
+              - {name: MICROCKS_URL, value: {{ .Values.microcks.url | quote }}}
+              - {name: MICROCKS_CLIENT_ID, valueFrom: {secretKeyRef: {name: microcks-client, key: client-id}}}
+              - {name: MICROCKS_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: microcks-client, key: client-secret}}}
+      pipelineRef: {name: {{ .Values.apiName }}-api}
+      params:
+        - {name: git-url, value: {{ .Values.repository | quote }}}
+        - {name: git-revision, value: {{ .Values.revision | quote }}}
+      workspaces:
+        - name: source
+          volumeClaimTemplate:
+            spec:
+              accessModes: [ReadWriteOnce]
+              resources: {requests: {storage: 1Gi}}

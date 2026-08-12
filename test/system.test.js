@@ -1,8 +1,4 @@
 const assert = require('node:assert/strict');
-const {mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync} = require('node:fs');
-const {tmpdir} = require('node:os');
-const path = require('node:path');
-const {spawnSync} = require('node:child_process');
 const YAML = require('yaml');
 const {fixture, lint, render, resource} = require('./helpers/helm');
 
@@ -23,66 +19,26 @@ function environmentValues(name) {
   return values;
 }
 
-function runGuard(script, destinationState) {
-  const directory = mkdtempSync(path.join(tmpdir(), 'cf-idp-image-guard-'));
-  try {
-    const bin = path.join(directory, 'bin');
-    mkdirSync(bin);
-    const skopeo = path.join(bin, 'skopeo');
-    writeFileSync(skopeo, `#!/bin/sh
-image=
-for argument in "$@"; do image="$argument"; done
-case "$image" in
-  *source*) printf '%s\\n' 'sha256:111111' ;;
-  *destination*)
-    case "$GUARD_DESTINATION_STATE" in
-      absent) exit 1 ;;
-      same) printf '%s\\n' 'sha256:111111' ;;
-      different) printf '%s\\n' 'sha256:222222' ;;
-    esac
-    ;;
-esac
-`);
-    chmodSync(skopeo, 0o755);
-    const sourceDigest = path.join(directory, 'source-digest');
-    const destinationDigest = path.join(directory, 'destination-digest');
-    const destinationExists = path.join(directory, 'destination-exists');
-    const executable = script
-      .replace('$(results.sourceDigest.path)', sourceDigest)
-      .replace('$(results.destinationDigest.path)', destinationDigest)
-      .replace('$(results.destinationExists.path)', destinationExists);
-    const result = spawnSync('/bin/sh', ['-c', executable], {
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
-        SOURCE_IMAGE: 'docker://registry/source:version',
-        DESTINATION_IMAGE: 'docker://registry/destination:version',
-        GUARD_DESTINATION_STATE: destinationState,
-        HOME: directory,
-      },
-    });
-    return {
-      result,
-      sourceDigest: result.status === 0 ? readFileSync(sourceDigest, 'utf8') : undefined,
-      destinationDigest: result.status === 0 ? readFileSync(destinationDigest, 'utf8') : undefined,
-      destinationExists: result.status === 0 ? readFileSync(destinationExists, 'utf8') : undefined,
-    };
-  } finally {
-    rmSync(directory, {recursive: true, force: true});
-  }
-}
-
 test('system lints and renders the namespace and chart discovery contracts', () => {
   const values = fixture('nonstandard-lifecycle.yaml');
   lint('charts/system/environment', values);
   const resources = render('charts/system/environment', values);
   resource(resources, 'Namespace', 'orders-build');
-  resource(resources, 'AppProject', 'tenant-retail-orders');
+  const project = resource(resources, 'AppProject', 'tenant-retail-orders');
+  assert.deepEqual(project.spec.sourceRepos, [
+    'https://platform-gitea.example/platform-private/developer-charts.git',
+    'https://tenant-gitea.example/retail-team/orders-system.git',
+  ]);
+  assert.deepEqual(project.spec.destinations, [{
+    server: 'https://kubernetes.default.svc', namespace: 'orders*',
+  }]);
+  assert.deepEqual(project.spec.clusterResourceWhitelist, []);
+  assert.equal(project.spec.namespaceResourceWhitelist.some(
+    entry => entry.group === '*' || entry.kind === '*'), false);
 
   const expected = [
     ['-api-builds', 'apis/*/values.yaml', 'charts/api/openapi'],
-    ['-components', 'components/*/environments/sandbox.yaml', 'charts/component/openjdk'],
+    ['-components', 'components/*/environments/sandbox.yaml', 'charts/component/container'],
     ['-resources', 'resources/*/*/environments/sandbox.yaml', '{{ .implementation.path }}'],
   ];
   for (const [suffix, discoveryPath, chartPath] of expected) {
@@ -110,12 +66,17 @@ test('system lints and renders the namespace and chart discovery contracts', () 
     systemName: apiValues.systemName,
     revision: apiValues.revision,
     schemaRegistry: apiValues.schemaRegistry,
+    microcks: apiValues.microcks,
     spectralRules: apiValues.spectralRules,
   }, {
     apiName: '{{ index .path.segments 1 }}',
     systemName: 'orders',
     revision: 'trunk',
-    schemaRegistry: {apiUrl: 'https://registry.example/apis/registry/v3'},
+    schemaRegistry: {
+      apiUrl: 'https://registry.example/apis/registry/v3',
+      authServerUrl: 'https://keycloak.example/realms/platform',
+    },
+    microcks: {url: 'https://microcks.example'},
     spectralRules: {
       repositoryUrl: 'https://example.invalid/spectral-rules.git',
       revision: 'v1.0.0',
@@ -152,7 +113,12 @@ test('first active environment does not provision resources into a future namesp
     assert.equal(serviceAccount.imagePullSecrets, undefined);
   }
   assert.equal(devResources.some(item => item.kind === 'SecretStore'), false);
-  assert.equal(devResources.some(item => item.kind === 'ExternalSecret'), false);
+  assert.deepEqual(devResources.filter(item => item.kind === 'ExternalSecret')
+    .map(item => item.metadata.name).sort(), ['apicurio-client', 'microcks-client']);
+  for (const secret of devResources.filter(item => item.kind === 'ExternalSecret')) {
+    assert.equal(secret.metadata.namespace, 'orders-build');
+    assert.equal(secret.spec.secretStoreRef.name, 'retail-publishers');
+  }
   assert.equal(devResources.some(item =>
     item.kind === 'ServiceAccount' && item.metadata.name === 'image-promoter-source-reader'), false);
   assert.equal(devResources.some(item =>
@@ -224,7 +190,9 @@ test('activated target owns its incoming promotion credential bridge and local p
   const pipeline = resource(stageResources, 'Pipeline', 'promote-image');
   assert.equal(pipeline.metadata.namespace, 'orders-preprod');
   const guard = pipeline.spec.tasks.find(task => task.name === 'assert-release-version');
-  assert.equal(guard.taskRef.name, 'assert-image-tag-compatible');
+  assert.deepEqual(taskRefParams(guard), {
+    kind: 'task', name: 'assert-image-tag-compatible', namespace: 'tekton-tasks',
+  });
   const copy = pipeline.spec.tasks.find(task => task.name === 'copy');
   assert.equal(copy.taskRef.resolver, 'cluster');
   assert.deepEqual(taskRefParams(copy), {
@@ -286,24 +254,11 @@ test('each activated target reads only from its immediately preceding environmen
   ]);
 });
 
-test('image tag guard accepts absent and matching destinations and rejects reassignment', () => {
-  const resources = render('charts/system/environment', fixture('nonstandard-lifecycle.yaml'));
-  const guard = resource(resources, 'Task', 'assert-image-tag-compatible');
-  const script = guard.spec.steps[0].script;
-
-  const absent = runGuard(script, 'absent');
-  assert.equal(absent.result.status, 0, absent.result.stderr);
-  assert.equal(absent.sourceDigest, 'sha256:111111');
-  assert.equal(absent.destinationDigest, '');
-  assert.equal(absent.destinationExists, 'false');
-
-  const same = runGuard(script, 'same');
-  assert.equal(same.result.status, 0, same.result.stderr);
-  assert.equal(same.destinationDigest, 'sha256:111111');
-  assert.equal(same.destinationExists, 'true');
-
-  const different = runGuard(script, 'different');
-  assert.notEqual(different.result.status, 0);
-  assert.match(different.result.stderr,
-    /human release version already refers to a different image digest/);
+test('system renders no Task resources and resolves the shared tag guard', () => {
+  const resources = render('charts/system/environment', environmentValues('stage'));
+  assert.equal(resources.some(item => item.kind === 'Task'), false);
+  const pipeline = resource(resources, 'Pipeline', 'promote-image');
+  assert.deepEqual(taskRefParams(
+    pipeline.spec.tasks.find(task => task.name === 'assert-release-version')),
+  {kind: 'task', name: 'assert-image-tag-compatible', namespace: 'tekton-tasks'});
 });

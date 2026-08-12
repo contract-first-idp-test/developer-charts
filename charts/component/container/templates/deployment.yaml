@@ -1,4 +1,9 @@
 {{- if .Values.image.tag }}
+{{- $recipe := include "component.buildRecipe" . | fromYaml }}
+{{- $runtimePort := .Values.runtime.port | default $recipe.runtimePort }}
+{{- $healthPort := .Values.runtime.health.port | default $recipe.healthPort }}
+{{- $readinessPath := .Values.runtime.health.readinessPath | default $recipe.readinessPath }}
+{{- $livenessPath := .Values.runtime.health.livenessPath | default $recipe.livenessPath }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,14 +39,16 @@ spec:
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - {name: http, containerPort: 8080}
-            - {name: health, containerPort: {{ .Values.runtime.health.port }}}
+            - {name: http, containerPort: {{ $runtimePort }}}
+{{- if ne ($healthPort | int) ($runtimePort | int) }}
+            - {name: health, containerPort: {{ $healthPort }}}
+{{- end }}
           readinessProbe:
-            httpGet: {path: {{ .Values.runtime.health.readinessPath }}, port: health}
+            httpGet: {path: {{ $readinessPath }}, port: {{ $healthPort }}}
             initialDelaySeconds: {{ .Values.runtime.health.initialDelaySeconds }}
             periodSeconds: {{ .Values.runtime.health.periodSeconds }}
           livenessProbe:
-            httpGet: {path: {{ .Values.runtime.health.livenessPath }}, port: health}
+            httpGet: {path: {{ $livenessPath }}, port: {{ $healthPort }}}
             initialDelaySeconds: {{ .Values.runtime.health.initialDelaySeconds }}
             periodSeconds: {{ .Values.runtime.health.periodSeconds }}
           resources:
@@ -72,7 +79,7 @@ metadata:
 spec:
   selector: {app.kubernetes.io/name: {{ .Values.componentName }}}
   ports:
-    - {name: http, port: 8080, targetPort: http}
+    - {name: http, port: {{ $runtimePort }}, targetPort: http}
 {{- if .Values.route.enabled }}
 ---
 apiVersion: route.openshift.io/v1

@@ -1,4 +1,9 @@
 {{- $domainProjectName := include "contract-first-idp.domainProjectName" (dict "domainName" .Values.metadata.name) }}
+{{- $host := index .Values.metadata.annotations "contract-first-idp.github.io/scm-host" }}
+{{- $org := index .Values.metadata.annotations "contract-first-idp.github.io/domain-org" }}
+{{- $domainRepo := index .Values.metadata.annotations "contract-first-idp.github.io/domain-repo" }}
+{{- $platformChartsRepository := include "contract-first-idp.platformChartsRepository" . }}
+{{- $tenantDomainRepository := include "contract-first-idp.tenantRepository" (dict "host" $host "org" $org "repository" $domainRepo) }}
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -14,13 +19,20 @@ metadata:
 spec:
   description: Contract-First IDP System controller Applications for the {{ .Values.metadata.name }} Domain.
   sourceRepos:
-    - "*"
+    - {{ $platformChartsRepository | quote }}
+    - {{ $tenantDomainRepository | quote }}
   destinations:
-    - server: "*"
-      namespace: "*"
+    - server: {{ .Values.spec.platform.argocd.destinationServer | quote }}
+      namespace: {{ .Values.spec.platform.argocd.namespace | quote }}
   clusterResourceWhitelist:
-    - group: "*"
-      kind: "*"
+    - {group: "", kind: Namespace}
+    - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding}
   namespaceResourceWhitelist:
-    - group: "*"
-      kind: "*"
+    - {group: "", kind: ServiceAccount}
+    - {group: argoproj.io, kind: AppProject}
+    - {group: argoproj.io, kind: ApplicationSet}
+    - {group: rbac.authorization.k8s.io, kind: Role}
+    - {group: rbac.authorization.k8s.io, kind: RoleBinding}
+    - {group: external-secrets.io, kind: ExternalSecret}
+    - {group: external-secrets.io, kind: SecretStore}
+    - {group: tekton.dev, kind: Pipeline}

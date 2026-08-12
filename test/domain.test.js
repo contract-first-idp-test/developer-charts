@@ -23,7 +23,38 @@ test('one Domain render creates discovery for every ordered environment', () => 
   const values = fixture('split-scm.yaml');
   lint('charts/domain/environment', values);
   const resources = render('charts/domain/environment', values);
-  resource(resources, 'AppProject', 'tenant-retail');
+  const project = resource(resources, 'AppProject', 'tenant-retail');
+  assert.deepEqual(project.spec.sourceRepos, [
+    'https://platform-gitea.example/platform-private/developer-charts.git',
+    'https://tenant-gitea.example/retail-team/retail-domain.git',
+  ]);
+  assert.deepEqual(project.spec.destinations, [{
+    server: 'https://kubernetes.default.svc', namespace: 'openshift-gitops',
+  }]);
+  assert.deepEqual(project.spec.clusterResourceWhitelist, [
+    {group: '', kind: 'Namespace'},
+    {group: 'rbac.authorization.k8s.io', kind: 'ClusterRoleBinding'},
+  ]);
+  assert.doesNotMatch(YAML.stringify(project.spec), /["']?\*["']?/);
+  assert.deepEqual(resources.filter(item => item.kind === 'Password')
+    .map(item => item.metadata.name).sort(), ['retail-apicurio', 'retail-microcks']);
+  assert.deepEqual(resources.filter(item => item.kind === 'KeycloakOIDCClient')
+    .map(item => item.metadata.name).sort(), ['retail-apicurio', 'retail-microcks']);
+  const reader = resource(resources, 'Role', 'retail-publisher-reader');
+  assert.deepEqual(reader.rules, [{
+    apiGroups: [''], resources: ['secrets'],
+    resourceNames: ['retail-apicurio', 'retail-microcks'], verbs: ['get'],
+  }]);
+  const store = resource(resources, 'ClusterSecretStore', 'retail-publishers');
+  assert.deepEqual(store.spec.conditions[0].namespaceSelector.matchLabels, {
+    'contract-first-idp.github.io/domain': 'retail',
+    'platform.contract-first.io/build-environment': 'true',
+  });
+  const keycloakStore = resource(resources, 'ClusterSecretStore',
+    'retail-keycloak-publishers');
+  assert.deepEqual(keycloakStore.spec.conditions[0].namespaceSelector.matchLabels, {
+    'kubernetes.io/metadata.name': 'keycloak',
+  });
   const applicationSets = resources.filter(item => item.kind === 'ApplicationSet');
   assert.deepEqual(applicationSets.map(item => item.metadata.name), [
     'retail-sandbox-systems',
@@ -81,6 +112,7 @@ test('Domain uses tenant identity and trusted platform inputs', () => {
   assert.equal(valuesObject.owner, 'group:default/domain-maintainers');
   assert.equal(valuesObject.schemaRegistry.apiUrl,
     'https://registry.example/apis/registry/v3');
+  assert.equal(valuesObject.microcks.url, 'https://microcks.example');
   assert.deepEqual(valuesObject.spectralRules, {
     repositoryUrl: 'https://platform-gitea.example/platform-private/spectral-rules.git',
     revision: 'v1.0.0',
@@ -124,7 +156,7 @@ test('Domain root environment is not required and tenant definitions cannot carr
 test('all distributed chart versions are 1.0.0', () => {
   const charts = [
     'charts/domain/environment', 'charts/system/environment',
-    'charts/api/openapi', 'charts/component/openjdk', 'charts/resource/postgresql',
+    'charts/api/openapi', 'charts/component/container', 'charts/resource/postgresql',
   ];
   for (const chart of charts) {
     const metadata = YAML.parse(fs.readFileSync(path.join(root, chart, 'Chart.yaml'), 'utf8'));
@@ -140,7 +172,7 @@ test('charts use the canonical entity and responsibility paths', () => {
     .sort();
   expect(discovered).toEqual([
     'charts/api/openapi/Chart.yaml',
-    'charts/component/openjdk/Chart.yaml',
+    'charts/component/container/Chart.yaml',
     'charts/domain/environment/Chart.yaml',
     'charts/resource/postgresql/Chart.yaml',
     'charts/system/environment/Chart.yaml',

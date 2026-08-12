@@ -1,6 +1,6 @@
-# OpenJDK Component chart
+# Container Component chart
 
-Reconciles one OpenJDK Component environment in a single Argo CD Application.
+Reconciles one Container Component environment in a single Argo CD Application.
 
 The chart always creates the environment-local ImageStream. An optional release value file supplies
 `image.tag`; until a tag is selected, Deployment, Service, Route, and promotion resources remain
@@ -24,17 +24,33 @@ Main pushes and release tags invoke one Component Pipeline:
 
 | Path | Behavior |
 | --- | --- |
-| Main push | Package source with tests skipped, publish `git-<full-commit-sha>`, update `latest`, and optionally restart the runtime |
+| Main push | Run the approved profile recipe, publish `git-<full-commit-sha>`, update `latest`, and optionally restart the runtime |
 | Human tag | Resolve the tagged commit, find its existing commit image, and create the human tag on the same digest |
 
 The release path accepts `v<major>[.<minor>[.<patch>]][-<prerelease>]`. It never packages source,
-rebuilds an image, updates `latest`, or restarts the runtime. The task makes one copy attempt and
-does not check whether the human tag already exists, so Quay or release policy must prevent tag
-movement.
+rebuilds an image, updates `latest`, or restarts the runtime. The shared tag guard permits an absent
+tag or a tag already resolving to the same digest and rejects reassignment to a different digest.
 
-The Pipeline resolves Operator-managed `git-clone` and `buildah` Tasks from `openshift-pipelines`
-and the curated Java 21 `maven` Task from `tekton-tasks`. Source repositories are public and cloned
-without a Git credential.
+The Pipeline resolves Operator-managed `git-clone` and `buildah` Tasks from
+`openshift-pipelines`; generic platform Tasks such as `maven`, `nodejs`, and the tag guard live in
+`tekton-tasks`. Charts own orchestration and approved recipes but render no `Task` or inline
+`taskSpec`. Source repositories are public and cloned without a Git credential.
+
+## Approved build profiles
+
+Tenant state selects only `build.profile`; it cannot choose builder images, commands, Dockerfiles,
+or health defaults.
+
+| Profile | Package execution | Image input | Runtime defaults |
+| --- | --- | --- | --- |
+| `quarkus-jvm` | Maven `clean verify -B`, Java 21 | `Dockerfile.jvm` | HTTP 8080, Quarkus health on 9000 |
+| `quarkus-native` | Maven wrapper `clean verify -Dnative -DskipITs -B`, Mandrel JDK 21 | `Dockerfile.native` | HTTP 8080, Quarkus health on 9000 |
+| `spring-boot` | Maven `clean verify -B`, Java 21 | `Dockerfile` | HTTP 8080, actuator health on 8081 |
+| `nodejs` | `npm ci`, test, optional build on Node 24 | `Dockerfile` | HTTP/health on 8080 |
+
+The generic Maven Task prefers an executable repository `./mvnw` and otherwise uses the image's
+`/usr/bin/mvn`. This is required for the approved Mandrel image, which contains Java/native-image
+but not a system Maven binary.
 
 ## Initial build
 
@@ -94,6 +110,6 @@ chart.
 ## Validate
 
 ```bash
-helm lint charts/component/openjdk
-helm template example-component charts/component/openjdk -f /path/to/component-values.yaml
+helm lint charts/component/container
+helm template example-component charts/component/container -f /path/to/component-values.yaml
 ```

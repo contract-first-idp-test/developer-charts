@@ -8,6 +8,12 @@ It creates one Domain AppProject and one System-discovery ApplicationSet per ord
 Each ApplicationSet watches `systems/*/environments/<environment>.yaml`; a missing activation file
 means that System is inactive in that environment.
 
+The same Domain Application owns its privileged publisher boundary without creating a separate
+security Application: distinct Apicurio/Microcks Password generators, canonical Secrets,
+same-namespace Keycloak projections and `KeycloakOIDCClient` resources, exact-name get-only RBAC,
+and conditioned SecretStores. The admitted Domain name determines every privileged name and
+selector. Only the selected build namespace can consume the generic local publisher Secrets.
+
 Required values are `metadata`, `spec.platformTarget`, `spec.groupId`, `spec.environments`, and
 `spec.platform`. Domain definitions own only `namespaceSuffix`. The chart synthesizes the current
 System-chart environment contract by combining those suffixes with

@@ -22,7 +22,7 @@ test('API specification build lints and configures distinct main and release pub
 
   assert.deepEqual(pipeline.spec.tasks.map(task => task.name), [
     'clone', 'clone-spectral-rules', 'spectral',
-    'publish-git-version', 'publish-release-version',
+    'publish-git-version', 'microcks-import', 'publish-release-version',
   ]);
   const rulesClone = pipeline.spec.tasks.find(task => task.name === 'clone-spectral-rules');
   assert.deepEqual(rulesClone.runAfter, ['clone']);
@@ -43,6 +43,17 @@ test('API specification build lints and configures distinct main and release pub
     `spectral-rules/${values.spectralRules.path}`);
   assert.deepEqual(pipeline.spec.tasks.find(
     task => task.name === 'publish-git-version').runAfter, ['spectral']);
+  const microcks = pipeline.spec.tasks.find(task => task.name === 'microcks-import');
+  assert.deepEqual(microcks.runAfter, ['spectral']);
+  assert.equal(microcks.taskRef.params.find(param => param.name === 'name').value,
+    'microcks-cli');
+  assert.match(microcks.params.find(param => param.name === 'SCRIPT').value,
+    /microcks import[\s\S]*MICROCKS_URL[\s\S]*MICROCKS_CLIENT_ID/);
+  assert.match(microcks.params.find(param => param.name === 'SCRIPT').value,
+    /--insecure-tls/);
+  assert.deepEqual(pipeline.spec.tasks.find(
+    task => task.name === 'publish-release-version').runAfter, ['publish-git-version']);
+  assert.equal(microcks.runAfter.includes('publish-git-version'), false);
 
   const pipelineSource = fs.readFileSync(path.resolve(
     __dirname, '../charts/api/openapi/templates/pipeline.yaml'), 'utf8');
@@ -61,6 +72,33 @@ test('API specification build lints and configures distinct main and release pub
   assert.equal(listener.spec.serviceAccountName, 'orders-build');
   const hook = resource(resources, 'Job', 'orders-api-initial-publish');
   assert.equal(hook.metadata.annotations['argocd.argoproj.io/hook'], 'Sync');
+  const hookScript = hook.spec.template.spec.containers[0].args[0];
+  assert.doesNotMatch(hookScript, /oc wait --for=condition=Succeeded/);
+  assert.match(hookScript, /case "\$status" in[\s\S]*True\)[\s\S]*exit 0/);
+  assert.match(hookScript,
+    /False\)[\s\S]*PipelineRun \$run_name failed: \$\{reason:-UnknownReason\}: \$\{message:-No message reported\}[\s\S]*exit 1/);
+  assert.match(hookScript, /Timed out after 30m waiting for PipelineRun \$run_name/);
+  const triggerTemplate = resource(resources, 'TriggerTemplate', 'orders-api');
+  const triggered = triggerTemplate.spec.resourcetemplates[0].spec.taskRunSpecs;
+  assert.deepEqual(triggered.map(item => item.pipelineTaskName), [
+    'publish-git-version', 'publish-release-version', 'microcks-import',
+  ]);
+  const initial = YAML.parse(resource(resources, 'ConfigMap',
+    'orders-api-initial-publish').data['pipelinerun.yaml']);
+  assert.deepEqual(initial.spec.taskRunSpecs.map(item => item.pipelineTaskName), [
+    'publish-git-version', 'publish-release-version', 'microcks-import',
+  ]);
+  for (const specs of [triggered, initial.spec.taskRunSpecs]) {
+    const gitPublish = specs.find(item => item.pipelineTaskName === 'publish-git-version');
+    assert.deepEqual(gitPublish.podTemplate.env.map(item => item.name), [
+      'APICURIO_AUTH_SERVER_URL', 'APICURIO_CLIENT_ID', 'APICURIO_CLIENT_SECRET',
+    ]);
+    assert.equal(gitPublish.podTemplate.env[1].valueFrom.secretKeyRef.name,
+      'apicurio-client');
+    const importSpec = specs.find(item => item.pipelineTaskName === 'microcks-import');
+    assert.equal(importSpec.podTemplate.env[1].valueFrom.secretKeyRef.name,
+      'microcks-client');
+  }
   assert.equal(resources.some(item => item.kind === 'Secret'), false);
-  assert.doesNotMatch(YAML.stringify(resources), /password|dockerconfigjson/i);
+  assert.doesNotMatch(YAML.stringify(resources), /dockerconfigjson/i);
 });

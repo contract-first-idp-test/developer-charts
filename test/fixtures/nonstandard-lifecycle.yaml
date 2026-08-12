@@ -31,6 +31,9 @@ registry:
     runtimePullSecretName: runtime-registry-auth
 schemaRegistry:
   apiUrl: https://registry.example/apis/registry/v3
+  authServerUrl: https://keycloak.example/realms/platform
+microcks:
+  url: https://microcks.example
 build:
   environment: sandbox
   namespaceSuffix: -build

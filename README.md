@@ -22,7 +22,7 @@ contracts consumed by these charts are produced by `software-templates`.
 Domain environment
   -> System environment
       -> OpenAPI publication
-      -> OpenJDK Component
+      -> Container Component
       -> PostgreSQL Resource
 ```
 
@@ -31,7 +31,7 @@ Domain environment
 | `domain/environment` | Discover active Systems for each Domain environment | [README](charts/domain/environment/README.md) |
 | `system/environment` | Create the System scope and discover leaf desired state | [README](charts/system/environment/README.md) |
 | `api/openapi` | Validate and publish OpenAPI contracts | [README](charts/api/openapi/README.md) |
-| `component/openjdk` | Build, release, promote, and run OpenJDK Components | [README](charts/component/openjdk/README.md) |
+| `component/container` | Build, release, promote, and run Container Components | [README](charts/component/container/README.md) |
 | `resource/postgresql` | Reconcile a Crunchy PostgreSQL Resource | [README](charts/resource/postgresql/README.md) |
 
 All charts in this coordinated release use chart version `1.0.0` and are consumed from repository
@@ -79,7 +79,7 @@ checks.
 | `charts/domain/environment/` | Domain environment discovery |
 | `charts/system/environment/` | System scope and leaf ApplicationSets |
 | `charts/api/openapi/` | OpenAPI validation and Registry publication |
-| `charts/component/openjdk/` | Component ImageStream, build, runtime, release, and promotion |
+| `charts/component/container/` | Component ImageStream, build, runtime, release, and promotion |
 | `charts/resource/postgresql/` | PostgreSQL Resource implementation |
 | `docs/` | Architecture, development, operations, and platform requirements |
 | `test/` | Rendered contract tests and fixtures |

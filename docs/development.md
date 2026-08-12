@@ -40,7 +40,7 @@ Lint an individual chart:
 ```bash
 helm lint charts/domain/environment
 helm lint charts/system/environment
-helm lint charts/component/openjdk
+helm lint charts/component/container
 helm lint charts/api/openapi
 helm lint charts/resource/postgresql
 ```

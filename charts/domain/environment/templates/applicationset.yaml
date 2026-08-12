@@ -83,6 +83,8 @@ spec:
 {{ toYaml $.Values.spec.platform.registry.quay | indent 16 }}
               schemaRegistry:
 {{ toYaml $.Values.spec.platform.schemaRegistry | indent 16 }}
+              microcks:
+{{ toYaml $.Values.spec.platform.services.microcks | indent 16 }}
               spectralRules:
 {{ toYaml $.Values.spec.platform.spectralRules | indent 16 }}
               build:

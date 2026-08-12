@@ -38,6 +38,8 @@ spec:
               serviceAccountName: {{ .Values.systemName }}-build
               schemaRegistry:
 {{ toYaml .Values.schemaRegistry | indent 16 }}
+              microcks:
+{{ toYaml .Values.microcks | indent 16 }}
               spectralRules:
 {{ toYaml .Values.spectralRules | indent 16 }}
         - repoURL: {{ .Values.systemRepository.url }}

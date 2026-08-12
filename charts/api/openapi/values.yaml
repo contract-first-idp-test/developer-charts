@@ -6,6 +6,9 @@ revision: main
 serviceAccountName: pipeline
 schemaRegistry:
   apiUrl: https://apicurio.example.invalid/apis/registry/v3
+  authServerUrl: https://keycloak.example.invalid/realms/platform
+microcks:
+  url: https://microcks.example.invalid
 spectralRules:
   repositoryUrl: https://example.invalid/spectral-rules.git
   revision: v1.0.0

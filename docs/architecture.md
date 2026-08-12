@@ -28,7 +28,7 @@ System repository.
 | Reconcile from Git without writing back | Tenant Git is the declared state, so charts and controllers only read it and report status through Argo CD, Tekton, and workload conditions. Avoiding controller-generated commits prevents feedback loops and preserves a clear distinction between requested state and observed state. |
 | Discover intent with layered ApplicationSets | Domain, System, and leaf layers mirror the catalog concepts and ownership model already presented in Backstage. Small discovery files let Argo CD create only the Applications implied by tenant intent, without a central process regenerating a large manifest. Their paths and presence are consequently treated as a stable, tested interface. |
 | Keep trusted implementation coordinates in platform values | Tenants can select supported profiles and configure exposed behavior, but the platform supplies the chart repository and revision. This prevents tenant state from redirecting Argo CD to arbitrary implementation code. Adding a new Resource implementation is therefore an intentional platform change with its own chart, schema, and compatibility tests. |
-| Use one Application per Component environment | The environment declaration creates the OpenJDK Application and its ImageStream immediately. Its optional release file adds `image.tag`; workload and promotion resources render only after that selection, so registry provisioning still converges before a release without requiring a second Application. |
+| Use one Application per Component environment | The environment declaration creates the Container Application and its ImageStream immediately. Its optional release file adds `image.tag`; workload and promotion resources render only after that selection, so registry provisioning still converges before a release without requiring a second Application. |
 | Build once and materialize releases from the built digest | The build environment produces `git-<sha>`, and a human Git tag resolves that commit before copying the existing image to a release tag. A small digest guard refuses to reassign an existing human version to a different artifact. This avoids a release-time rebuild and preserves the link to the built commit. The current Maven step still uses `-DskipTests`, so test execution remains a separate policy. |
 | Use environment-local repositories and adjacent promotion | Each runtime pulls from its own environment's Quay repository, keeping credentials local and making image transport an explicit event. External Secrets places the immediately preceding repository's narrowly scoped pull credential in the target namespace; the target PipelineRun combines it with the target push credential. Direct skipping and reverse copying are intentionally excluded; rollback selects an older release and follows the same forward path. |
 | Assign each shared AppProject one owner | One parent Domain Application owns the Domain project. System projects remain owned by their build-environment controller. |
@@ -46,7 +46,7 @@ flowchart TD
     systemApps --> system[System chart]
     systemGit[System desired-state files] --> system
     system --> apiApps["API Applications<br/>build environment only"]
-    system --> componentApps[OpenJDK Component Applications]
+    system --> componentApps[Container Component Applications]
     system --> resourceApps[Resource Applications]
     apiApps --> cluster[OpenShift APIs]
     componentApps --> cluster
@@ -64,11 +64,11 @@ discovered only by the build-environment System Application.
 | --- | --- | --- | --- |
 | Domain | `systems/*/environments/<environment>.yaml` | Selected environment | One active System Application |
 | System | `apis/*/values.yaml` | Build environment only | One OpenAPI publication Application |
-| System | `components/*/environments/<environment>.yaml` | Selected environment | One OpenJDK Component Application |
+| System | `components/*/environments/<environment>.yaml` | Selected environment | One Container Component Application |
 | Values | Optional `components/*/releases/<environment>.yaml` | Selected environment | Image selection merged into that Component Application |
 | System | `resources/*/*/environments/<environment>.yaml` | Selected environment | One Resource implementation Application |
 
-The environment file is the discovery signal. The OpenJDK chart creates its ImageStream without a
+The environment file is the discovery signal. The Container chart creates its ImageStream without a
 release; selecting a release adds workload and, outside the build environment, promotion resources
 without changing the Application boundary.
 

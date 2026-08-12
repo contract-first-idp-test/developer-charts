@@ -15,14 +15,22 @@ metadata:
 spec:
   description: Contract-First IDP leaf Applications for the {{ .Values.systemName }} System in the {{ .Values.domainName }} Domain.
   sourceRepos:
-    - "*"
+    - {{ .Values.delivery.charts.repository | quote }}
+    - {{ .Values.systemRepository.url | quote }}
   destinations:
-    - server: "*"
-      namespace: "*"
-  clusterResourceWhitelist:
-    - group: "*"
-      kind: "*"
+    - server: {{ .Values.delivery.destinationServer | quote }}
+      namespace: {{ printf "%s*" .Values.systemName | quote }}
+  clusterResourceWhitelist: []
   namespaceResourceWhitelist:
-    - group: "*"
-      kind: "*"
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Service}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: Job}
+    - {group: image.openshift.io, kind: ImageStream}
+    - {group: postgres-operator.crunchydata.com, kind: PostgresCluster}
+    - {group: route.openshift.io, kind: Route}
+    - {group: tekton.dev, kind: Pipeline}
+    - {group: triggers.tekton.dev, kind: EventListener}
+    - {group: triggers.tekton.dev, kind: TriggerBinding}
+    - {group: triggers.tekton.dev, kind: TriggerTemplate}
 {{- end }}

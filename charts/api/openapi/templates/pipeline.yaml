@@ -65,7 +65,24 @@ spec:
             - -Dregistry.version=$(tasks.clone.results.COMMIT)
             - -Dregistry.ifExists=FIND_OR_CREATE_VERSION
             - -B
-        - {name: JAVA_VERSION, value: "21"}
+        - {name: MAVEN_IMAGE, value: "registry.access.redhat.com/ubi9/openjdk-21:1.24"}
+    - name: microcks-import
+      runAfter: [spectral]
+      taskRef:
+        resolver: cluster
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: microcks-cli}
+          - {name: namespace, value: tekton-tasks}
+      workspaces: [{name: source, workspace: source, subPath: source}]
+      params:
+        - name: SCRIPT
+          value: |
+            microcks import "specification.yaml:true" \
+              --microcksURL="${MICROCKS_URL}/api/" \
+              --keycloakClientId="${MICROCKS_CLIENT_ID}" \
+              --keycloakClientSecret="${MICROCKS_CLIENT_SECRET}" \
+              --insecure-tls
     - name: publish-release-version
       runAfter: [publish-git-version]
       when:
@@ -86,4 +103,4 @@ spec:
             - -Dregistry.version=$(params.release-version)
             - -Dregistry.ifExists=CREATE_VERSION
             - -B
-        - {name: JAVA_VERSION, value: "21"}
+        - {name: MAVEN_IMAGE, value: "registry.access.redhat.com/ubi9/openjdk-21:1.24"}

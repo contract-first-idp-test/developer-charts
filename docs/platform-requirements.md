@@ -32,14 +32,15 @@ Verify the required Tasks:
 
 ```bash
 oc get task -n openshift-pipelines git-clone buildah skopeo-copy
-oc get task -n tekton-tasks maven
+oc get task -n tekton-tasks maven nodejs microcks-cli assert-image-tag-compatible
 ```
 
 The charts use `tekton.dev/v1` Pipelines and PipelineRuns plus Tekton Triggers
 `triggers.tekton.dev/v1beta1` resources with CEL interceptors. `git-clone`, `buildah`, and
-`skopeo-copy` are expected in `openshift-pipelines`. The platform-curated `maven` Task in
-`tekton-tasks` must support Java 21, the `GOALS` and `JAVA_VERSION` parameters, and the `source` and
-`maven_settings` workspaces. The installed `skopeo-copy` Task must expose the uppercase
+`skopeo-copy` are expected in `openshift-pipelines`. The platform-curated generic Tasks in
+`tekton-tasks` provide Maven (including a selectable approved Java/Mandrel image and Maven-wrapper
+fallback), Node 24 scripts, Microcks CLI scripts, and the release digest guard. The installed
+`skopeo-copy` Task must expose the uppercase
 `SOURCE_IMAGE_URL`, `DESTINATION_IMAGE_URL`, `SRC_TLS_VERIFY`, `DEST_TLS_VERIFY`, and `VERBOSE`
 parameters, the optional `images_url` workspace, and the `SOURCE_DIGEST` and
 `DESTINATION_DIGEST` results. CF-IDP's single-image copies supply the source and destination URLs
@@ -82,10 +83,11 @@ same platform value to the charts. It must be reachable from:
 - generated Component Maven builds;
 - any developer environment that runs publication locally.
 
-API publication uses the generated repository's official Apicurio Registry Maven plugin
-configuration. The charts do not expose a Registry credential or credential workspace, so the
-endpoint must accept these Maven requests without authentication. An authenticated Registry
-requires a platform-customized Maven Task or an extension to the values and workspace contract.
+API publication uses the generated repository's official Apicurio Registry Maven plugin with a
+per-Domain OIDC client. Anonymous reads remain supported, while writes require authentication and
+Apicurio's hard owner/group authorization. A Domain-specific ESO store may project the client only
+into the namespace labeled for both that admitted Domain and its trusted build environment. The
+same namespace receives a separate per-Domain Microcks client for the trusted shared repository.
 
 ## Quay Bridge
 
@@ -104,7 +106,7 @@ spec:
           runtimePullSecretName: default-quay-openshift
 ```
 
-The `charts/component/openjdk` chart creates an ImageStream as soon as a Component environment is
+The `charts/component/container` chart creates an ImageStream as soon as a Component environment is
 active. Quay Bridge responds by provisioning the environment-local repository and robot
 credentials; workload resources remain absent until `image.tag` selects an image.
 

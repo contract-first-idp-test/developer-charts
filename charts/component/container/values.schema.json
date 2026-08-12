@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["systemName", "componentName", "environment", "namespace", "image", "runtime", "promotion", "build"],
+  "required": ["systemName", "componentName", "environment", "namespace", "implementationProfile", "image", "runtime", "promotion", "build"],
   "properties": {
     "systemName": {
       "type": "string",
@@ -19,6 +19,16 @@
       "type": "string",
       "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"
     },
+    "implementationProfile": {
+      "type": "string",
+      "enum": [
+        "quarkus-camel-openapi",
+        "quarkus-camel-openapi-yaml",
+        "spring-boot-camel-openapi",
+        "spring-boot-openapi",
+        "nodejs-openapi"
+      ]
+    },
     "replicas": {"type": "integer", "minimum": 0},
     "image": {
       "type": "object",
@@ -33,9 +43,17 @@
       "type": "object",
       "required": ["health", "resources", "imagePullSecretNames", "envFromSecretNames", "env"],
       "properties": {
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
         "health": {
           "type": "object",
-          "required": ["readinessPath", "livenessPath", "port", "initialDelaySeconds", "periodSeconds"]
+          "required": ["initialDelaySeconds", "periodSeconds"],
+          "properties": {
+            "readinessPath": {"type": "string", "pattern": "^/"},
+            "livenessPath": {"type": "string", "pattern": "^/"},
+            "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+            "initialDelaySeconds": {"type": "integer", "minimum": 0},
+            "periodSeconds": {"type": "integer", "minimum": 1}
+          }
         },
         "resources": {"type": "object"},
         "imagePullSecretNames": {"type": "array", "items": {"type": "string", "minLength": 1}},
@@ -70,9 +88,13 @@
     },
     "build": {
       "type": "object",
-      "required": ["enabled", "serviceAccountName", "registryPushSecretName"],
+      "required": ["enabled", "profile", "serviceAccountName", "registryPushSecretName"],
       "properties": {
         "enabled": {"type": "boolean"},
+        "profile": {
+          "type": "string",
+          "enum": ["quarkus-jvm", "quarkus-native", "spring-boot", "nodejs"]
+        },
         "serviceAccountName": {
           "type": "string",
           "pattern": "^([a-z][a-z0-9]*)(-[a-z0-9]+)*$"

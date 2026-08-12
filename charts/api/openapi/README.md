@@ -12,20 +12,26 @@ flowchart TD
     revision[Git revision] --> clone[Clone repository]
     clone --> rules[Clone pinned Spectral rules]
     rules --> spectral[Spectral quality gate]
-    spectral --> sha[Publish exact commit SHA]
+    spectral --> sha[Publish exact commit SHA to Apicurio]
+    spectral --> microcks[Import into Microcks]
     tag{Human release tag?}
     sha --> tag
     tag -->|yes| release[Publish immutable human version]
     tag -->|no| complete[Complete]
+    microcks --> complete
 ```
 
 `spectral-quality-gate` is the sole contract validator. Its configured ruleset owns OpenAPI
 structure, required metadata, operation identifiers, uniqueness, style, and governance. A failed
-Spectral Task fails the PipelineRun, and neither Registry publication task can start.
+Spectral Task fails the PipelineRun, and neither publication branch can start. After validation,
+Apicurio publication and Microcks import execute in parallel; failure of either fails the
+PipelineRun.
 
-The repository's Maven POM configures the official Apicurio Registry Maven plugin. Both publication
-steps resolve the curated `tekton-tasks/maven` Task with Java 21. The Pipeline contains no custom
-Registry REST client or downloaded CLI.
+The repository's Maven POM configures the official Apicurio Registry Maven plugin. Apicurio steps
+resolve the curated `tekton-tasks/maven` Task with Java 21 and receive the build-local client through
+secret-backed TaskRun environment variables. Microcks resolves the generic
+`tekton-tasks/microcks-cli` Task and receives its independent Domain client the same way. Secret
+values never appear in Pipeline YAML.
 
 ## Version rules
 
@@ -55,12 +61,16 @@ the values contract but is not implemented; public EventListener Routes are lab/
 | `repository`, `revision` | Public API source |
 | `serviceAccountName` | ServiceAccount used by the PipelineRun |
 | `schemaRegistry.apiUrl` | Publication endpoint |
+| `schemaRegistry.authServerUrl` | Keycloak token endpoint base used by the Maven plugin |
+| `microcks.url` | Shared trusted Microcks repository endpoint |
 | `spectralRules.{repositoryUrl,revision,path}` | Pinned platform quality rules |
 | `webhook.signatureVerification` | Reserved future contract; currently inactive |
 
-The chart does not mount Schema Registry credentials. The endpoint must accept the generated Maven
-plugin requests without authentication, or the platform must supply a customized authenticated
-Maven Task.
+The System chart projects `apicurio-client` and `microcks-client` only into the Domain's build
+namespace. PipelineRuns select the relevant keys with `valueFrom.secretKeyRef`; the Pipeline
+ServiceAccount receives no general Secret-read permission. Apicurio allows anonymous retrieval but
+requires these OIDC credentials for publication. Microcks uses per-Domain publisher identities in
+one trusted shared repository; repository tenancy is intentionally out of scope.
 
 ## Validate
 
