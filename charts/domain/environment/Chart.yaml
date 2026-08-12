@@ -2,4 +2,4 @@ apiVersion: v2
 name: domain-environment
 description: Discovers a Domain's Systems across every ordered environment in one render.
 type: application
-version: 1.0.0
+version: 1.0.1

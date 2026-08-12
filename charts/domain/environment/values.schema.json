@@ -68,8 +68,15 @@
         },
         "platform": {
           "type": "object",
-          "required": ["target", "argocd", "cluster", "charts", "schemaRegistry", "services", "security", "spectralRules", "registry", "build"],
+          "required": ["distribution", "target", "argocd", "cluster", "charts", "schemaRegistry", "services", "security", "spectralRules", "registry", "build"],
           "properties": {
+            "distribution": {
+              "type": "object",
+              "required": ["version"],
+              "properties": {
+                "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+              }
+            },
             "target": {
               "type": "object",
               "required": ["name"],

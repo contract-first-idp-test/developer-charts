@@ -153,15 +153,16 @@ test('Domain root environment is not required and tenant definitions cannot carr
   );
 });
 
-test('all distributed chart versions are 1.0.0', () => {
+test('all distributed chart versions match the repository release', () => {
+  const release = YAML.parse(fs.readFileSync(path.join(root, 'release.yaml'), 'utf8'));
   const charts = [
     'charts/domain/environment', 'charts/system/environment',
     'charts/api/openapi', 'charts/component/container', 'charts/resource/postgresql',
   ];
   for (const chart of charts) {
     const metadata = YAML.parse(fs.readFileSync(path.join(root, chart, 'Chart.yaml'), 'utf8'));
-    assert.equal(metadata.version, '1.0.0', chart);
-    if (metadata.appVersion !== undefined) assert.equal(metadata.appVersion, '1.0.0', chart);
+    assert.equal(metadata.version, release.version, chart);
+    if (metadata.appVersion !== undefined) assert.equal(metadata.appVersion, release.version, chart);
   }
 });
 
