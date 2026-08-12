@@ -34,8 +34,8 @@ Domain environment
 | `component/container` | Build, release, promote, and run Container Components | [README](charts/component/container/README.md) |
 | `resource/postgresql` | Reconcile a Crunchy PostgreSQL Resource | [README](charts/resource/postgresql/README.md) |
 
-All charts in this repository release use version `1.0.1` and are consumed from exact revision
-`v1.0.1`. Repository compatibility is declared in
+All charts in this repository release use version `1.0.2`. Installations select an exact compatible
+tag (the current workshop remains deliberately pinned to `v1.0.1`). Repository compatibility is declared in
 `release.yaml`, independently of the other CF-IDP repositories. See
 [Release and compatibility](docs/release-versioning.md).
 

@@ -74,7 +74,7 @@
               "type": "object",
               "required": ["version"],
               "properties": {
-                "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+                "version": {"type": "string", "pattern": "^v?[0-9]+\\.[0-9]+\\.[0-9]+$"}
               }
             },
             "target": {

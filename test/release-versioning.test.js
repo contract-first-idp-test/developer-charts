@@ -19,7 +19,7 @@ function render(platformVersion) {
 describe('developer-charts release contract', () => {
   test('declares its independent platform compatibility requirement', () => {
     expect(release).toEqual({
-      version: '1.0.1', requires: {platformComponents: '>=1.0.0 <2.0.0'},
+      version: '1.0.2', requires: {platformComponents: '>=1.0.0 <2.0.0'},
     });
     expect(semver.valid(release.version)).toBe(release.version);
     expect(semver.validRange(release.requires.platformComponents))
@@ -38,10 +38,11 @@ describe('developer-charts release contract', () => {
 
   test('accepts the current target and rejects incompatible platform contracts early', () => {
     expect(render('1.1.0').status).toBe(0);
+    expect(render('v1.0.0').status).toBe(0);
     const incompatible = render('2.0.0');
     expect(incompatible.status).not.toBe(0);
     expect(incompatible.stderr).toContain(
-      'developer-charts 1.0.1 requires platform-components >=1.0.0 <2.0.0');
+      'developer-charts 1.0.2 requires platform-components >=1.0.0 <2.0.0');
     expect(incompatible.stderr).toContain('selected PlatformTarget provides 2.0.0');
   });
 
