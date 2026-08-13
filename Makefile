@@ -1,8 +1,11 @@
 SHELL := /usr/bin/env bash
-.PHONY: test test-install test-clean
+.PHONY: test release-check test-install test-clean
 
 test: test-install
 	npm test --prefix test
+
+release-check: test
+	node scripts/validate-release.js
 
 test-install:
 	npm ci --prefix test --loglevel=error

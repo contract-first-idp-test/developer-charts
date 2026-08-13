@@ -1,17 +1,43 @@
-# Release and compatibility
+# Release and compatibility model
 
-`developer-charts` versions the tenant runtime/chart contract: accepted values, discovery file
-structures, and rendered OpenShift resources. Its root `release.yaml` declares the compatible
-PlatformTarget contract range. It has no dependency on software-templates; templates consume it.
+The repositories remain independently versioned:
 
-Patch releases repair chart implementation and keep the same platform requirement. Minor releases
-may add chart capability and raise the minimum platform-components version. Major releases denote
-incompatible chart values or generated-tenant contract changes that may require migration.
+```text
+software-templates -> developer-charts -> platform-components
+software-templates ----------------------> platform-components
+```
 
-The Domain entrypoint validates the selected PlatformTarget version with Helm's standard SemVer
-support before rendering any child ApplicationSets. The checked-in test ties that runtime range to
-`release.yaml`, avoiding an independent undocumented constraint.
+`developer-charts` consumes the PlatformTarget contract and owns tenant runtime, Helm values,
+schemas, and rendered-resource contracts. Root `release.yaml` is authoritative:
 
-A compatibility range such as `platformComponents: ">=1.0.0 <2.0.0"` does not select code. The
-PlatformTarget still pins an exact tag such as `v1.0.1`, and generated Argo CD Applications retain
-that exact revision until the platform operator deliberately upgrades it.
+```yaml
+version: 1.0.0
+requires:
+  platformComponents: ">=1.0.0 <2.0.0"
+```
+
+The compatibility range states which platform contracts the charts accept; an installation still
+selects one exact immutable chart tag. All distributed first-party `Chart.yaml` versions, and
+their repository-owned `appVersion` fields where present, match the repository release.
+
+A patch fixes implementation behavior, must preserve dependency requirements exactly, and does not
+require another repository release. A minor adds capability and may raise the platform minimum. A
+major is an incompatible chart/runtime contract change. For example, a hypothetical `1.0.1`
+chart patch keeps the range above, while a hypothetical `1.1.0` may require
+`platformComponents: ">=1.1.0 <2.0.0"`.
+
+## Release procedure
+
+1. Decide this repository's SemVer from changes to its chart/runtime contract.
+2. Update `release.yaml` and every repository-owned chart version.
+3. Run `make release-check`.
+4. Run any required cross-repository compatibility checks.
+5. Commit and push the verified release candidate.
+6. Create the exact `vX.Y.Z` tag at that commit.
+7. Push the tag and verify the tag-triggered GitHub Actions gate.
+8. Update platform configuration to the desired exact compatible chart tag.
+
+The release validator uses `node-semver`, checks tag/version consistency and monotonicity,
+compares dependency requirements with the previous tag for patches, and rejects stale chart
+versions. A patch release in one repository does not require a release in another repository when
+the existing compatibility ranges already include it.

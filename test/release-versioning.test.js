@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const YAML = require('yaml');
 const semver = require('semver');
+const {validateChartMetadata} = require('../scripts/validate-release');
 
 const root = path.resolve(__dirname, '..');
 const release = YAML.parse(fs.readFileSync(path.join(root, 'release.yaml'), 'utf8'));
@@ -19,7 +20,7 @@ function render(platformVersion) {
 describe('developer-charts release contract', () => {
   test('declares its independent platform compatibility requirement', () => {
     expect(release).toEqual({
-      version: '1.0.2', requires: {platformComponents: '>=1.0.0 <2.0.0'},
+      version: '1.0.0', requires: {platformComponents: '>=1.0.0 <2.0.0'},
     });
     expect(semver.valid(release.version)).toBe(release.version);
     expect(semver.validRange(release.requires.platformComponents))
@@ -42,19 +43,26 @@ describe('developer-charts release contract', () => {
     const incompatible = render('2.0.0');
     expect(incompatible.status).not.toBe(0);
     expect(incompatible.stderr).toContain(
-      'developer-charts 1.0.2 requires platform-components >=1.0.0 <2.0.0');
+      'developer-charts 1.0.0 requires platform-components >=1.0.0 <2.0.0');
     expect(incompatible.stderr).toContain('selected PlatformTarget provides 2.0.0');
   });
 
   test('patch releases preserve ranges while minors may raise their floor', () => {
-    const patch = {version: '1.0.9', requires: {...release.requires}};
+    const patch = {version: '1.0.1', requires: {...release.requires}};
     expect(patch.requires).toEqual(release.requires);
-    expect(semver.satisfies('1.1.9', patch.requires.platformComponents)).toBe(true);
+    expect(semver.satisfies('1.1.0', patch.requires.platformComponents)).toBe(true);
 
     const nextMinor = {
-      version: '1.1.0', requires: {platformComponents: '>=1.2.0 <2.0.0'},
+      version: '1.1.0', requires: {platformComponents: '>=1.1.0 <2.0.0'},
     };
-    expect(semver.satisfies('1.1.9', nextMinor.requires.platformComponents)).toBe(false);
-    expect(semver.satisfies('1.2.0', nextMinor.requires.platformComponents)).toBe(true);
+    expect(semver.satisfies('1.0.9', nextMinor.requires.platformComponents)).toBe(false);
+    expect(semver.satisfies('1.1.0', nextMinor.requires.platformComponents)).toBe(true);
+  });
+
+  test('release validation rejects a stale owned chart version', () => {
+    expect(() => validateChartMetadata(release, [{
+      relative: 'charts/domain/environment/Chart.yaml',
+      metadata: {version: '1.0.1'},
+    }])).toThrow(/does not match release.yaml/);
   });
 });

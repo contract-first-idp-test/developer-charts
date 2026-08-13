@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -14,6 +15,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -28,5 +31,9 @@ jobs:
           npm --version
           helm version --short
       - name: Run deterministic tests
+        if: github.ref_type != 'tag'
         run: make test
+      - name: Validate immutable release tag
+        if: github.ref_type == 'tag'
+        run: make release-check
       - run: git diff --check

@@ -2,4 +2,4 @@ apiVersion: v2
 name: api-openapi
 description: Validate and publish OpenAPI specification repositories to the Schema Registry.
 type: application
-version: 1.0.2
+version: 1.0.0

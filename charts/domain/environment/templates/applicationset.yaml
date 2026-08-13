@@ -8,7 +8,7 @@
 {{- $requiredPlatformRange := ">=1.0.0 <2.0.0" }}
 {{- $platformVersion := required "PlatformTarget spec.platform.distribution.version is required" .Values.spec.platform.distribution.version }}
 {{- if not (semverCompare $requiredPlatformRange $platformVersion) }}
-{{- fail (printf "developer-charts 1.0.2 requires platform-components %s; selected PlatformTarget provides %s" $requiredPlatformRange $platformVersion) }}
+{{- fail (printf "developer-charts 1.0.0 requires platform-components %s; selected PlatformTarget provides %s" $requiredPlatformRange $platformVersion) }}
 {{- end }}
 {{- $definitions := .Values.spec.environments.definitions }}
 {{- $order := .Values.spec.environments.order }}
