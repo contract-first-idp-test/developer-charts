@@ -1,6 +1,6 @@
 'use strict';
 
-const {validateRelease} = require('../scripts/validate-release');
+const {validateRelease} = require('./validate-release');
 
 const base = {
   version: '1.2.3',
@@ -77,4 +77,3 @@ describe('release validator', () => {
     })).toThrow(/not a valid SemVer range/);
   });
 });
-

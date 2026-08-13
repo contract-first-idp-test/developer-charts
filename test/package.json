@@ -3,7 +3,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "release:validate": "node ../scripts/validate-release.js",
+    "release:validate": "node validate-release.js",
     "test": "jest --runInBand --config jest.config.js"
   },
   "devDependencies": {
