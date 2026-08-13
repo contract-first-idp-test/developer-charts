@@ -5,6 +5,7 @@ test: test-install
 	npm test --prefix test
 
 release-check: test
+	npm run --prefix test test:release
 	node test/validate-release.js
 
 test-install:

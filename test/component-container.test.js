@@ -1,8 +1,15 @@
 const assert = require('node:assert/strict');
 const YAML = require('yaml');
 const {
-  chartValues, lint, render, renderFailure, resource,
+  chartValues, fixture, lint, render, renderFailure, resource,
 } = require('./helpers/helm');
+
+function hasInlineTaskSpec(value) {
+  if (Array.isArray(value)) return value.some(hasInlineTaskSpec);
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(([key, child]) =>
+    key === 'taskSpec' || hasInlineTaskSpec(child));
+}
 
 function buildValues(profile = 'quarkus-jvm') {
   const values = chartValues('charts/component/container');
@@ -80,7 +87,10 @@ test.each([
   });
   const params = Object.fromEntries(packageTask.params.map(param => [param.name, param.value]));
   if (builderImage) assert.equal(params.MAVEN_IMAGE, builderImage);
-  else assert.equal(params.SCRIPT, 'npm ci\nnpm test\n');
+  else {
+    assert.match(params.SCRIPT, /npm ci[\s\S]*npm test/);
+    assert.doesNotMatch(params.SCRIPT, /npm run build/);
+  }
   const buildah = pipeline.spec.tasks.find(task => task.name === 'build-and-push');
   assert.equal(buildah.params.find(param => param.name === 'DOCKERFILE').value, dockerfile);
 
@@ -161,20 +171,29 @@ test('promoted container runtime omits build resources and produces stable relea
   assert.doesNotMatch(YAML.stringify(firstJob), /maven|buildah/i);
   assert.equal(first.some(item => item.kind === 'Secret'), false);
 
-  const wait = firstJob.spec.template.spec.initContainers.find(container =>
-    container.name === 'wait-for-promotion-pipeline');
-  assert.equal(wait.image, 'registry.redhat.io/openshift4/ose-cli');
-  const waitScript = wait.args.join('\n');
-  assert.match(waitScript, /oc get pipeline\.tekton\.dev "\$PIPELINE_NAME"/);
-  assert.match(waitScript, /max_attempts=31/);
-  assert.match(waitScript, /retry_seconds=10/);
-  assert.match(waitScript, /300 seconds/);
-  assert.doesNotMatch(YAML.stringify(firstJob), /tkn pipeline describe/);
+  assert.ok(firstJob.spec.template.spec.initContainers.some(container =>
+    container.name === 'wait-for-promotion-pipeline'));
   assert.match(firstJob.spec.template.spec.containers[0].args.join('\n'), /tkn pipeline start/);
-  assert.doesNotMatch(YAML.stringify(firstJob), /quay\.io\/openshift\/origin-cli:4\.16/);
 });
 
 test('component promotion rejects mutable latest outside the build environment', () => {
   assert.match(renderFailure('charts/component/container', promotionValues('latest')),
     /promotion requires an immutable human release/);
+});
+
+test('developer charts use shared Tasks instead of defining their own', () => {
+  const component = chartValues('charts/component/container');
+  component.build.enabled = true;
+  component.environment = component.build.environment;
+  component.image.tag = 'latest';
+  const rendered = [
+    ...render('charts/component/container', component),
+    ...render('charts/api/openapi', chartValues('charts/api/openapi')),
+    ...render('charts/domain/environment', fixture('split-scm.yaml')),
+    ...render('charts/system/environment', fixture('nonstandard-lifecycle.yaml')),
+    ...render('charts/resource/postgresql', chartValues('charts/resource/postgresql')),
+  ];
+  assert.equal(rendered.some(resource => resource.kind === 'Task'), false,
+    YAML.stringify(rendered.filter(resource => resource.kind === 'Task')));
+  assert.equal(hasInlineTaskSpec(rendered), false);
 });

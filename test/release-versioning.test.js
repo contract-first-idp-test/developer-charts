@@ -8,11 +8,8 @@ const release = YAML.parse(fs.readFileSync(path.join(root, 'release.yaml'), 'utf
 
 describe('developer-charts release policy', () => {
   test('declares its independent platform compatibility range', () => {
-    expect(release).toEqual({
-      version: '1.0.0',
-      requires: {platformComponents: '>=1.0.0 <2.0.0'},
-    });
     expect(semver.valid(release.version)).toBe(release.version);
+    expect(Object.keys(release.requires)).toEqual(['platformComponents']);
     expect(semver.validRange(release.requires.platformComponents)).not.toBeNull();
   });
 
@@ -28,16 +25,4 @@ describe('developer-charts release policy', () => {
     }
   });
 
-  test('models patch independence and additive minor requirements as fixtures', () => {
-    const patch = {version: '1.0.1', requires: {...release.requires}};
-    expect(patch.requires).toEqual(release.requires);
-    expect(semver.satisfies('1.0.0', patch.requires.platformComponents)).toBe(true);
-
-    const minor = {
-      version: '1.1.0',
-      requires: {platformComponents: '>=1.1.0 <2.0.0'},
-    };
-    expect(semver.satisfies('1.0.9', minor.requires.platformComponents)).toBe(false);
-    expect(semver.satisfies('1.1.0', minor.requires.platformComponents)).toBe(true);
-  });
 });

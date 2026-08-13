@@ -179,8 +179,6 @@ test('activated target owns its incoming promotion credential bridge and local p
   assert.match(distributedSource.spec.target.template.data['.dockerconfigjson'],
     /fromJson/);
 
-  assert.equal(stageResources.some(item =>
-    item.kind === 'Task' && item.metadata.name === 'skopeo-copy-image'), false);
   const pipelineServiceAccount = resource(stageResources, 'ServiceAccount', 'pipeline');
   assert.deepEqual(pipelineServiceAccount.secrets, [
     {name: 'image-promoter-source-sandbox'},
@@ -210,7 +208,6 @@ test('activated target owns its incoming promotion credential bridge and local p
     'SRC_TLS_VERIFY',
     'DEST_TLS_VERIFY',
   ]);
-  assert.doesNotMatch(YAML.stringify(stageResources), /skopeo copy|skopeo-copy-image/);
   for (const binding of stageResources.filter(item => item.kind === 'RoleBinding')) {
     assert.equal(binding.subjects.some(subject =>
       subject.name === 'pipeline' && subject.namespace &&
@@ -252,13 +249,4 @@ test('each activated target reads only from its immediately preceding environmen
     {name: 'image-promoter-source-stage'},
     {name: 'destination-registry-auth'},
   ]);
-});
-
-test('system renders no Task resources and resolves the shared tag guard', () => {
-  const resources = render('charts/system/environment', environmentValues('stage'));
-  assert.equal(resources.some(item => item.kind === 'Task'), false);
-  const pipeline = resource(resources, 'Pipeline', 'promote-image');
-  assert.deepEqual(taskRefParams(
-    pipeline.spec.tasks.find(task => task.name === 'assert-release-version')),
-  {kind: 'task', name: 'assert-image-tag-compatible', namespace: 'tekton-tasks'});
 });

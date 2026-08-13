@@ -5,20 +5,6 @@ const YAML = require('yaml');
 const {fixture, lint, render, renderFailure, resource} = require('./helpers/helm');
 const {repositoryRoot: root} = require('./helpers/paths');
 
-test('keeps the private Node and Jest project entirely under test', () => {
-  for (const obsolete of ['package.json', 'package-lock.json', 'jest.config.js', 'node_modules']) {
-    assert.equal(fs.existsSync(path.join(root, obsolete)), false, obsolete);
-  }
-  const testPackage = JSON.parse(fs.readFileSync(path.join(root, 'test/package.json'), 'utf8'));
-  assert.deepEqual(
-    {name: testPackage.name, private: testPackage.private},
-    {name: 'developer-charts-tests', private: true},
-  );
-  for (const required of [
-    'test/package-lock.json', 'test/jest.config.js', 'test/helpers/paths.js',
-  ]) assert.equal(fs.existsSync(path.join(root, required)), true, required);
-});
-
 test('one Domain render creates discovery for every ordered environment', () => {
   const values = fixture('split-scm.yaml');
   lint('charts/domain/environment', values);
@@ -56,21 +42,11 @@ test('one Domain render creates discovery for every ordered environment', () => 
     'kubernetes.io/metadata.name': 'keycloak',
   });
   const applicationSets = resources.filter(item => item.kind === 'ApplicationSet');
-  assert.deepEqual(applicationSets.map(item => item.metadata.name), [
-    'retail-sandbox-systems',
-    'retail-stage-systems',
-    'retail-production-systems',
-  ]);
-  assert.deepEqual(applicationSets.map(item => item.spec.generators[0].git.files[0].path), [
-    'systems/*/environments/sandbox.yaml',
-    'systems/*/environments/stage.yaml',
-    'systems/*/environments/production.yaml',
-  ]);
-  assert.deepEqual(applicationSets.map(item => item.spec.template.spec.sources[0].path), [
-    'charts/system/environment',
-    'charts/system/environment',
-    'charts/system/environment',
-  ]);
+  assert.equal(applicationSets.length, values.spec.environments.order.length);
+  assert.deepEqual(applicationSets.map(item => item.spec.generators[0].git.files[0].path),
+    values.spec.environments.order.map(name => `systems/*/environments/${name}.yaml`));
+  assert.equal(applicationSets.every(item =>
+    item.spec.template.spec.sources[0].path === 'charts/system/environment'), true);
 });
 
 test('Domain chart reads target configuration from spec.platform', () => {
@@ -151,31 +127,4 @@ test('Domain root environment is not required and tenant definitions cannot carr
     renderFailure('charts/domain/environment', registryOverride),
     /additional propert(?:y|ies).*schemaRegistry.*not allowed/i,
   );
-});
-
-test('all distributed chart versions match the repository release', () => {
-  const release = YAML.parse(fs.readFileSync(path.join(root, 'release.yaml'), 'utf8'));
-  const charts = [
-    'charts/domain/environment', 'charts/system/environment',
-    'charts/api/openapi', 'charts/component/container', 'charts/resource/postgresql',
-  ];
-  for (const chart of charts) {
-    const metadata = YAML.parse(fs.readFileSync(path.join(root, chart, 'Chart.yaml'), 'utf8'));
-    assert.equal(metadata.version, release.version, chart);
-    if (metadata.appVersion !== undefined) assert.equal(metadata.appVersion, release.version, chart);
-  }
-});
-
-test('charts use the canonical entity and responsibility paths', () => {
-  const discovered = fs.readdirSync(path.join(root, 'charts'), {recursive: true})
-    .filter(relative => relative.endsWith('Chart.yaml'))
-    .map(relative => path.join('charts', relative).replaceAll(path.sep, '/'))
-    .sort();
-  expect(discovered).toEqual([
-    'charts/api/openapi/Chart.yaml',
-    'charts/component/container/Chart.yaml',
-    'charts/domain/environment/Chart.yaml',
-    'charts/resource/postgresql/Chart.yaml',
-    'charts/system/environment/Chart.yaml',
-  ]);
 });

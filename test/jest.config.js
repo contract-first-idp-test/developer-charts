@@ -11,6 +11,8 @@ module.exports = {
     '<rootDir>/test/node_modules/',
     '<rootDir>/test/fixtures/',
     '<rootDir>/test/live/',
+    '<rootDir>/test/release-versioning.test.js',
+    '<rootDir>/test/release-validator.test.js',
   ],
   testTimeout: 30000,
 };

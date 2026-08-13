@@ -4,7 +4,8 @@
   "type": "commonjs",
   "scripts": {
     "release:validate": "node validate-release.js",
-    "test": "jest --runInBand --config jest.config.js"
+    "test": "jest --runInBand --config jest.config.js",
+    "test:release": "jest --runInBand --config jest.release.config.js"
   },
   "devDependencies": {
     "jest": "^30.4.2",

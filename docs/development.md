@@ -33,6 +33,9 @@ The Jest test runner:
 - exercises split platform/tenant SCM;
 - uses nonstandard environment names to catch hard-coded lifecycle assumptions.
 
+Release-policy tests are intentionally excluded from this fast suite. `make release-check` runs
+the fast suite, the focused release tests, and release-candidate validation.
+
 ## Focused Helm feedback
 
 Lint an individual chart:
