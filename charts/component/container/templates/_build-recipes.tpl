@@ -41,7 +41,7 @@ Dockerfile, and runtime defaults remain platform-owned here.
     "executor" "script"
     "task" "nodejs"
     "taskNamespace" "tekton-tasks"
-    "script" "npm ci\nnpm test\nnpm run build --if-present"
+    "script" "npm ci\nnpm test"
     "dockerfilePath" "./Dockerfile"
     "runtimePort" 8080
     "healthPort" 8080

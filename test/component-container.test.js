@@ -80,7 +80,7 @@ test.each([
   });
   const params = Object.fromEntries(packageTask.params.map(param => [param.name, param.value]));
   if (builderImage) assert.equal(params.MAVEN_IMAGE, builderImage);
-  else assert.match(params.SCRIPT, /npm ci[\s\S]*npm test[\s\S]*npm run build/);
+  else assert.equal(params.SCRIPT, 'npm ci\nnpm test\n');
   const buildah = pipeline.spec.tasks.find(task => task.name === 'build-and-push');
   assert.equal(buildah.params.find(param => param.name === 'DOCKERFILE').value, dockerfile);
 

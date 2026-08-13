@@ -46,7 +46,7 @@ or health defaults.
 | `quarkus-jvm` | Maven `clean verify -B`, Java 21 | `Dockerfile.jvm` | HTTP 8080, Quarkus health on 9000 |
 | `quarkus-native` | Maven wrapper `clean verify -Dnative -DskipITs -B`, Mandrel JDK 21 | `Dockerfile.native` | HTTP 8080, Quarkus health on 9000 |
 | `spring-boot` | Maven `clean verify -B`, Java 21 | `Dockerfile` | HTTP 8080, actuator health on 8081 |
-| `nodejs` | `npm ci`, test, optional build on Node 24 | `Dockerfile` | HTTP/health on 8080 |
+| `nodejs` | `npm ci` and test on Node 24 (the scaffold test builds first) | `Dockerfile` | HTTP/health on 8080 |
 
 The generic Maven Task prefers an executable repository `./mvnw` and otherwise uses the image's
 `/usr/bin/mvn`. This is required for the approved Mandrel image, which contains Java/native-image
