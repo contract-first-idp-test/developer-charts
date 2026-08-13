@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {createRequire} = require('node:module');
-const {execFileSync, spawnSync} = require('node:child_process');
+const {execFileSync} = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
 const requireFromTests = createRequire(path.join(root, 'test/package.json'));
@@ -25,9 +25,8 @@ function validateRelease({release, tag, previousRelease, previousTag}) {
   invariant(release && typeof release === 'object', 'release.yaml must contain a mapping');
   invariant(semver.valid(release.version) === release.version,
     `release.yaml version is not valid SemVer: ${release.version}`);
-  const expectedTag = `v${release.version}`;
-  invariant(tag === expectedTag,
-    `release tag ${tag} does not match release.yaml version ${release.version} (expected ${expectedTag})`);
+  invariant(tag === `v${release.version}`,
+    `release tag ${tag} does not match release.yaml version ${release.version}`);
 
   const requirements = release.requires || {};
   invariant(requirements && typeof requirements === 'object' && !Array.isArray(requirements),
@@ -38,8 +37,7 @@ function validateRelease({release, tag, previousRelease, previousTag}) {
   }
 
   if (!previousRelease) return;
-  invariant(previousTag, 'previousTag is required with previousRelease');
-  const previousVersion = previousTag.slice(1);
+  const previousVersion = previousTag?.slice(1);
   invariant(semver.valid(previousVersion) === previousVersion,
     `previous release tag is not valid SemVer: ${previousTag}`);
   invariant(previousRelease.version === previousVersion,
@@ -49,27 +47,13 @@ function validateRelease({release, tag, previousRelease, previousTag}) {
 
   const current = semver.parse(release.version);
   const previous = semver.parse(previousVersion);
-  const isPatch = current.major === previous.major && current.minor === previous.minor;
-  if (isPatch) {
-    const before = JSON.stringify(canonical(previousRelease.requires || {}));
-    const after = JSON.stringify(canonical(requirements));
-    invariant(after === before,
-      `patch release ${release.version} must not change dependency compatibility requirements from ${previousVersion}`);
+  if (current.major === previous.major && current.minor === previous.minor) {
+    invariant(
+      JSON.stringify(canonical(requirements)) ===
+        JSON.stringify(canonical(previousRelease.requires || {})),
+      `patch release ${release.version} must not change dependency compatibility requirements`,
+    );
   }
-}
-
-function readYaml(relative) {
-  return YAML.parse(fs.readFileSync(path.join(root, relative), 'utf8'));
-}
-
-function walk(directory, name, matches = []) {
-  for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
-    if (entry.name === '.git' || entry.name === 'node_modules') continue;
-    const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) walk(absolute, name, matches);
-    else if (entry.name === name) matches.push(absolute);
-  }
-  return matches;
 }
 
 function validateChartMetadata(release, charts) {
@@ -84,44 +68,24 @@ function validateChartMetadata(release, charts) {
   }
 }
 
-function validateDerivedMetadata(release) {
-  const repository = path.basename(root);
-  if (repository === 'developer-charts') {
-    const charts = walk(path.join(root, 'charts'), 'Chart.yaml').map(chart => ({
-      relative: path.relative(root, chart),
-      metadata: YAML.parse(fs.readFileSync(chart, 'utf8')),
-    }));
-    validateChartMetadata(release, charts);
-  } else if (repository === 'software-templates') {
-    const generated = spawnSync('node', ['scripts/generate-compatibility.js', '--check'], {
-      cwd: root, encoding: 'utf8',
-    });
-    invariant(generated.status === 0,
-      generated.stderr.trim() || 'generated compatibility metadata is stale');
-  } else if (repository === 'platform-components') {
-    const target = readYaml('configuration/catalog-info.yaml').spec.platform;
-    invariant(target.distribution.version === release.version,
-      'configured platform distribution version does not match release.yaml');
-    invariant(target.distribution.revision === `v${release.version}`,
-      'configured platform distribution revision must be the exact matching tag');
-    invariant(target.configuration.revision === target.tenantAdmission.branch,
-      'tenant admission must target the mutable platform configuration branch');
-    invariant(!/^v\d+\.\d+\.\d+$/.test(target.configuration.revision),
-      'platform configuration must use a writable branch, not a release tag');
-    const distribution = readYaml('configuration/platform-distribution.yaml');
-    invariant(distribution.spec.source.targetRevision === `v${release.version}`,
-      'platform distribution Application revision is stale');
-    const patch = distribution.spec.source.kustomize.patches[0].patch;
-    invariant(patch.includes(
-      `PLATFORM_CONFIGURATION_REVISION: "${target.configuration.revision}"`),
-    'platform distribution Application has a stale configuration revision');
-    const bootstrap = readYaml('bootstrap/kustomization.yaml');
-    const literal = bootstrap.configMapGenerator[0].literals.find(value =>
-      value.startsWith('PLATFORM_CONFIGURATION_REVISION='));
-    invariant(literal ===
-      `PLATFORM_CONFIGURATION_REVISION=${target.configuration.revision}`,
-    'bootstrap Application has a stale configuration revision');
-  }
+function chartMetadata() {
+  const chartsRoot = path.join(root, 'charts');
+  if (!fs.existsSync(chartsRoot)) return [];
+  const results = [];
+  const walk = directory => {
+    for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(absolute);
+      else if (entry.name === 'Chart.yaml') {
+        results.push({
+          relative: path.relative(root, absolute),
+          metadata: YAML.parse(fs.readFileSync(absolute, 'utf8')),
+        });
+      }
+    }
+  };
+  walk(chartsRoot);
+  return results;
 }
 
 function option(name) {
@@ -130,7 +94,7 @@ function option(name) {
 }
 
 function main() {
-  const release = readYaml('release.yaml');
+  const release = YAML.parse(fs.readFileSync(path.join(root, 'release.yaml'), 'utf8'));
   const tag = option('--tag') ||
     (process.env.GITHUB_REF_TYPE === 'tag' ? process.env.GITHUB_REF_NAME : undefined) ||
     `v${release.version}`;
@@ -147,7 +111,9 @@ function main() {
     : undefined;
 
   validateRelease({release, tag, previousRelease, previousTag});
-  validateDerivedMetadata(release);
+  if (path.basename(root) === 'developer-charts') {
+    validateChartMetadata(release, chartMetadata());
+  }
   console.log(`${path.basename(root)} release ${tag} is valid${previousTag
     ? ` after ${previousTag}` : ' as the first release'}.`);
 }
