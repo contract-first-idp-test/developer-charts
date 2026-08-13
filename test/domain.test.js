@@ -15,13 +15,12 @@ test('one Domain render creates discovery for every ordered environment', () => 
     'https://tenant-gitea.example/retail-team/retail-domain.git',
   ]);
   assert.deepEqual(project.spec.destinations, [{
-    server: 'https://kubernetes.default.svc', namespace: 'openshift-gitops',
+    server: 'https://kubernetes.default.svc', namespace: '*',
   }]);
   assert.deepEqual(project.spec.clusterResourceWhitelist, [
     {group: '', kind: 'Namespace'},
     {group: 'rbac.authorization.k8s.io', kind: 'ClusterRoleBinding'},
   ]);
-  assert.doesNotMatch(YAML.stringify(project.spec), /["']?\*["']?/);
   assert.deepEqual(resources.filter(item => item.kind === 'Password')
     .map(item => item.metadata.name).sort(), ['retail-apicurio', 'retail-microcks']);
   assert.deepEqual(resources.filter(item => item.kind === 'KeycloakOIDCClient')
@@ -47,6 +46,24 @@ test('one Domain render creates discovery for every ordered environment', () => 
     values.spec.environments.order.map(name => `systems/*/environments/${name}.yaml`));
   assert.equal(applicationSets.every(item =>
     item.spec.template.spec.sources[0].path === 'charts/system/environment'), true);
+});
+
+test('Domain project permits dynamically rendered System environment namespaces', () => {
+  const destinationServer = 'https://configured-cluster.example';
+  const domainValues = fixture('split-scm.yaml');
+  domainValues.spec.platform.argocd.destinationServer = destinationServer;
+  const domainProject = resource(
+    render('charts/domain/environment', domainValues), 'AppProject');
+
+  const systemValues = fixture('nonstandard-lifecycle.yaml');
+  systemValues.systemName = 'dynamically-discovered';
+  systemValues.environment.namespaceSuffix = '-environment';
+  const systemNamespace = resource(
+    render('charts/system/environment', systemValues), 'Namespace').metadata.name;
+
+  assert.equal(domainProject.spec.destinations.some(destination =>
+    destination.server === destinationServer &&
+    (destination.namespace === '*' || destination.namespace === systemNamespace)), true);
 });
 
 test('Domain chart reads target configuration from spec.platform', () => {

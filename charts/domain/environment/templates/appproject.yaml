@@ -23,7 +23,7 @@ spec:
     - {{ $tenantDomainRepository | quote }}
   destinations:
     - server: {{ .Values.spec.platform.argocd.destinationServer | quote }}
-      namespace: {{ .Values.spec.platform.argocd.namespace | quote }}
+      namespace: "*"
   clusterResourceWhitelist:
     - {group: "", kind: Namespace}
     - {group: rbac.authorization.k8s.io, kind: ClusterRoleBinding}
